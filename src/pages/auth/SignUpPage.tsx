@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useRouter } from '../../context/RouterContext';
+import { useRouter, PLATFORM_LOGO_URL } from '../../context/RouterContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/ui/Toast';
 import { Lock, Mail, Phone, User, ArrowLeft, ArrowRight } from 'lucide-react';
@@ -69,14 +69,14 @@ export const SignUpPage: React.FC = () => {
               className="inline-flex items-center gap-2.5 cursor-pointer mb-2"
             >
               <img
-                src="/assets/aistudio/Online_Earning_IT_Logo__e2215d9f_e2215d9f.png"
+                src={PLATFORM_LOGO_URL}
                 alt="ONLINE EARNING IT"
                 className="w-10 h-10 rounded-xl object-contain shadow-md"
               />
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-white">Create Your Account</h1>
             <p className="text-xs text-slate-400">
-              Join ONLINE EARNING IT to access tools, save results, and streamline your marketing.
+              Join ONLINE EARNING IT by registering with your Gmail.
             </p>
           </div>
 

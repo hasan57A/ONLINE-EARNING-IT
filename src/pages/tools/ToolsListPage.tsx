@@ -1,18 +1,25 @@
 import React, { useState } from 'react';
 import { useRouter } from '../../context/RouterContext';
-import { db } from '../../services/db';
+import { useAuth } from '../../context/AuthContext';
+import { useDbSync } from '../../hooks/useDbSync';
+import { db, TOOL_CREDIT_COSTS } from '../../services/db';
+import { PackageCreditGuard } from '../../components/ui/PackageCreditGuard';
 import {
   Search,
   ArrowRight,
   Sparkles,
-  SlidersHorizontal,
+  Coins,
+  CreditCard,
 } from 'lucide-react';
 import { RealisticToolIcon } from '../../components/ui/RealisticIcon';
 import { motion, AnimatePresence } from 'motion/react';
 
 export const ToolsListPage: React.FC = () => {
+  useDbSync();
   const { navigate } = useRouter();
+  const { user } = useAuth();
   const tools = db.getTools();
+  const access = db.canUseTool(user?.id);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
@@ -26,27 +33,69 @@ export const ToolsListPage: React.FC = () => {
     return matchSearch && matchCategory;
   });
 
+  const getToolCreditInfo = (slug: string): { label: string; isFree: boolean } => {
+    switch (slug) {
+      case 'user-agent-generator':
+        return { label: `${TOOL_CREDIT_COSTS.UA} Credit / UA`, isFree: false };
+      case 'number-generator':
+        return { label: `${TOOL_CREDIT_COSTS.NUMBER} Credits / Number`, isFree: false };
+      case 'mail-generator':
+        return { label: `${TOOL_CREDIT_COSTS.MAIL} Credits / Email`, isFree: false };
+      case 'lead-generator':
+        return { label: `${TOOL_CREDIT_COSTS.LEAD} Credits / Lead`, isFree: false };
+      case 'text-shuffler':
+      case 'duplicate-text-remover':
+        return { label: '100% Free', isFree: true };
+      default:
+        return { label: '1 Credit / item', isFree: false };
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Header Banner */}
       <div className="relative overflow-hidden p-6 sm:p-8 rounded-3xl border border-blue-500/30 bg-gradient-to-r from-slate-950 via-blue-950/50 to-slate-950 shadow-2xl">
         <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-blue-400 uppercase tracking-widest px-3 py-1 rounded-full bg-blue-500/15 border border-blue-500/30">
-              High-Precision Suite
-            </span>
-            <span className="text-xs font-mono text-emerald-400 font-bold">100% Free Access</span>
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-blue-400 uppercase tracking-widest px-3 py-1 rounded-full bg-blue-500/15 border border-blue-500/30">
+                High-Precision Suite
+              </span>
+              <span className="text-xs font-mono text-amber-400 font-bold inline-flex items-center gap-1">
+                <Coins className="w-3.5 h-3.5" />
+                <span>Package & Credit System</span>
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-2.5">
+              Performance Marketing Tools
+              <Sparkles className="w-5 h-5 text-amber-300" />
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+              Text Shuffler and Duplicate Text Remover are 100% Free. Generator tools use package credits: User Agent (1 Cr), Number (2 Cr), Mail (3 Cr), and Lead (5 Cr).
+            </p>
           </div>
-          <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-2.5">
-            Performance Marketing Tools
-            <Sparkles className="w-5 h-5 text-amber-300" />
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-            All tools are fully accessible without credit deductions or token locks. Generate, format, deduplicate, and export production-ready data instantly.
-          </p>
+
+          <button
+            onClick={() => navigate('/payment')}
+            className="shrink-0 px-4 py-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold inline-flex items-center gap-2 transition-colors cursor-pointer self-start lg:self-auto"
+          >
+            <CreditCard className="w-4 h-4" />
+            <span className="font-mono">
+              {access.isAdmin
+                ? 'Admin Unlimited Mode'
+                : `${access.remainingCredits.toLocaleString()} Credits · Buy / Top Up`}
+            </span>
+          </button>
         </div>
       </div>
+
+      {/* Package & Credit Access Guard */}
+      <PackageCreditGuard
+        userId={user?.id}
+        requiredCredits={1}
+        creditUnitLabel="UA: 1 Cr · Number: 2 Cr · Mail: 3 Cr · Lead: 5 Cr · Text Tools: Free"
+      />
 
       {/* Search & Category Filter Controls */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-stretch sm:items-center">
@@ -99,18 +148,34 @@ export const ToolsListPage: React.FC = () => {
               }`}
             >
               <div className="space-y-4">
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-2">
                   <RealisticToolIcon slug={tool.slug} size="lg" />
-                  {tool.enabled ? (
-                    <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <span>Ready</span>
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
-                      Maintenance
-                    </span>
-                  )}
+                  <div className="flex flex-col items-end gap-1.5">
+                    {tool.enabled ? (
+                      <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>Ready</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
+                        Maintenance
+                      </span>
+                    )}
+                    {(() => {
+                      const creditInfo = getToolCreditInfo(tool.slug);
+                      return (
+                        <span
+                          className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border ${
+                            creditInfo.isFree
+                              ? 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30'
+                              : 'text-amber-300 bg-amber-500/10 border-amber-500/20'
+                          }`}
+                        >
+                          {creditInfo.label}
+                        </span>
+                      );
+                    })()}
+                  </div>
                 </div>
 
                 <div>
@@ -148,4 +213,5 @@ export const ToolsListPage: React.FC = () => {
     </div>
   );
 };
+
 

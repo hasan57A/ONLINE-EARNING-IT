@@ -14,6 +14,7 @@ import {
   LogOut,
   LayoutDashboard,
   CreditCard,
+  Cloud,
 } from 'lucide-react';
 import { useDbSync } from '../../hooks/useDbSync';
 import { db } from '../../services/db';

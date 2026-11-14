@@ -1,15 +1,22 @@
 import React, { useState } from 'react';
-import { useRouter } from '../../context/RouterContext';
+import { useRouter, PLATFORM_LOGO_URL } from '../../context/RouterContext';
 import { useAuth } from '../../context/AuthContext';
-import { Menu, X, Shield, LayoutDashboard, LogOut, User as UserIcon, Sparkles } from 'lucide-react';
+import { useDbSync } from '../../hooks/useDbSync';
+import { useToast } from '../ui/Toast';
+import { db } from '../../services/db';
+import { Menu, X, Shield, LayoutDashboard, LogOut, User as UserIcon, Sparkles, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ThemeSwitcher } from '../ui/ThemeSwitcher';
 
 export const Navbar: React.FC = () => {
+  useDbSync();
   const { path, navigate } = useRouter();
   const { user, isAuthenticated, isAdmin, signOut } = useAuth();
+  const { showToast } = useToast();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const toolAccess = db.canUseTool(user?.id);
+  const isWorkspaceUnlocked = toolAccess.isAdmin || toolAccess.hasUsablePackage;
 
   const navLinks = [
     { label: 'Tools', href: '/tools' },
@@ -21,6 +28,16 @@ export const Navbar: React.FC = () => {
 
   const handleNavClick = (href: string) => {
     setMobileMenuOpen(false);
+    if ((href === '/tools' || href === '/resources') && isAuthenticated && !isWorkspaceUnlocked) {
+      showToast(
+        toolAccess.planStatus === 'pending'
+          ? 'Your package payment is pending admin approval.'
+          : 'Please take a package first to unlock Tools & Resources!',
+        'error'
+      );
+      navigate('/payment');
+      return;
+    }
     if (href.startsWith('/#')) {
       if (path !== '/') {
         navigate('/');
@@ -48,7 +65,7 @@ export const Navbar: React.FC = () => {
           <div className="relative">
             <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-amber-500 rounded-2xl blur-md opacity-50 group-hover:opacity-100 transition-opacity" />
             <img
-              src="/assets/aistudio/Online_Earning_IT_Logo__e2215d9f_e2215d9f.png"
+              src={PLATFORM_LOGO_URL}
               alt="ONLINE EARNING IT Logo"
               className="relative w-10 h-10 rounded-xl object-contain shadow-md group-hover:scale-105 transition-transform"
             />
@@ -69,11 +86,13 @@ export const Navbar: React.FC = () => {
         <nav className="hidden md:flex items-center gap-1.5 p-1.5 rounded-full border border-white/5 bg-slate-900/60 backdrop-blur-lg">
           {navLinks.map(item => {
             const isActive = path === item.href || (item.href.startsWith('/#') && path === '/');
+            const isLockedLink =
+              (item.href === '/tools' || item.href === '/resources') && isAuthenticated && !isWorkspaceUnlocked;
             return (
               <button
                 key={item.label}
                 onClick={() => handleNavClick(item.href)}
-                className={`relative px-4 py-1.5 text-xs font-semibold rounded-full transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`relative px-4 py-1.5 text-xs font-semibold rounded-full transition-colors whitespace-nowrap shrink-0 cursor-pointer inline-flex items-center gap-1.5 ${
                   isActive
                     ? 'text-white'
                     : 'text-slate-400 hover:text-slate-200'
@@ -87,6 +106,7 @@ export const Navbar: React.FC = () => {
                   />
                 )}
                 <span className="relative z-10">{item.label}</span>
+                {isLockedLink && <Lock className="w-3 h-3 text-rose-400 relative z-10" />}
               </button>
             );
           })}

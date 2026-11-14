@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/ui/Toast';
-import { db } from '../../services/db';
+import { db, TOOL_CREDIT_COSTS } from '../../services/db';
 import {
   Mail,
   Copy,
@@ -25,9 +25,10 @@ import { RealisticToolIcon } from '../../components/ui/RealisticIcon';
 import { motion, AnimatePresence } from 'motion/react';
 import { ALL_COUNTRIES_WITH_GLOBAL, findCountryGeo } from '../../data/countries';
 import { useDbSync } from '../../hooks/useDbSync';
+import { PackageCreditGuard } from '../../components/ui/PackageCreditGuard';
 
 export const MailGeneratorPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { showToast } = useToast();
   useDbSync();
 
@@ -45,6 +46,10 @@ export const MailGeneratorPage: React.FC = () => {
   const poolTotal = mailsPool.length;
   const poolConsumed = mailsPool.filter(m => m.used).length;
   const poolAvailable = poolTotal - poolConsumed;
+  const requestedQty = Math.min(100, Math.max(1, Number(quantity) || 1));
+  const effectiveItemsCount = poolAvailable > 0 ? Math.min(poolAvailable, requestedQty) : requestedQty;
+  const effectiveCreditsNeeded = effectiveItemsCount * TOOL_CREDIT_COSTS.MAIL;
+  const creditAccess = db.canUseTool(user?.id, effectiveCreditsNeeded);
 
   const filteredCountries = ALL_COUNTRIES_WITH_GLOBAL.filter(c => {
     const q = countrySearch.trim().toLowerCase();
@@ -72,6 +77,13 @@ export const MailGeneratorPage: React.FC = () => {
     }
 
     const qty = Math.min(poolAvailable, Math.min(100, Math.max(1, Number(quantity) || 1)));
+    const creditsRequired = qty * TOOL_CREDIT_COSTS.MAIL;
+    const access = db.canUseTool(user.id, creditsRequired);
+    if (!access.allowed) {
+      showToast(access.reason || 'Active package and credits are required to generate Emails.', 'error');
+      return;
+    }
+
     setIsGenerating(true);
 
     try {
@@ -84,6 +96,7 @@ export const MailGeneratorPage: React.FC = () => {
 
       setMails(results);
       setFromPool(fromPoolCount);
+      refreshUser();
 
       db.recordUsage(
         user.id,
@@ -94,7 +107,12 @@ export const MailGeneratorPage: React.FC = () => {
         `${country} · ${results.length} emails`
       );
 
-      showToast(`Generated & cut ${results.length} emails from Admin Database Pool!`, 'success');
+      showToast(
+        `Generated & cut ${results.length} emails from Admin Database Pool${
+          access.isAdmin ? '' : ` (${results.length * TOOL_CREDIT_COSTS.MAIL} credits used)`
+        }!`,
+        'success'
+      );
     } catch {
       showToast('Failed to generate emails.', 'error');
     } finally {
@@ -193,6 +211,13 @@ export const MailGeneratorPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Package & Credit Enforcement Banner */}
+      <PackageCreditGuard
+        userId={user?.id}
+        requiredCredits={effectiveCreditsNeeded}
+        creditUnitLabel="3 Credits per Email Address"
+      />
 
       {/* Pool Status Callout */}
       {poolAvailable === 0 ? (
@@ -356,11 +381,11 @@ export const MailGeneratorPage: React.FC = () => {
 
             {/* Action Trigger */}
             <motion.button
-              whileTap={{ scale: poolAvailable > 0 ? 0.98 : 1 }}
+              whileTap={{ scale: poolAvailable > 0 && creditAccess.allowed ? 0.98 : 1 }}
               onClick={handleGenerate}
-              disabled={isGenerating || poolAvailable === 0}
+              disabled={isGenerating || poolAvailable === 0 || !creditAccess.allowed}
               className={`w-full py-3.5 rounded-2xl font-bold text-xs tracking-wider uppercase shadow-lg flex items-center justify-center gap-2 transition-all ${
-                poolAvailable === 0
+                poolAvailable === 0 || !creditAccess.allowed
                   ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
                   : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-purple-600/25 cursor-pointer'
               }`}
@@ -369,9 +394,15 @@ export const MailGeneratorPage: React.FC = () => {
               <span>
                 {isGenerating
                   ? 'Retrieving Emails...'
+                  : !creditAccess.allowed
+                  ? creditAccess.hasActivePackage && creditAccess.remainingCredits > 0
+                    ? `Need ${effectiveCreditsNeeded} Cr (${creditAccess.remainingCredits} left)`
+                    : 'Package & Credits Required'
                   : poolAvailable === 0
                   ? 'Admin Must Upload Emails First'
-                  : `Generate & Cut ${Math.min(quantity, poolAvailable)} Emails`}
+                  : `Generate & Cut ${effectiveItemsCount} Emails${
+                      creditAccess.isAdmin ? '' : ` (${effectiveCreditsNeeded} Cr)`
+                    }`}
               </span>
             </motion.button>
           </div>

@@ -17,10 +17,12 @@ import {
 } from 'lucide-react';
 import { RealisticToolIcon } from '../../components/ui/RealisticIcon';
 import { motion } from 'motion/react';
+import { useDbSync } from '../../hooks/useDbSync';
 
 export const TextShufflerPage: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
+  useDbSync();
 
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
@@ -64,6 +66,11 @@ export const TextShufflerPage: React.FC = () => {
   };
 
   const handleShuffle = () => {
+    if (!user) {
+      showToast('Please sign in to use Text Shuffler.', 'error');
+      return;
+    }
+
     if (!inputText.trim()) {
       showToast('Please enter some text to shuffle.', 'error');
       return;
@@ -83,17 +90,15 @@ export const TextShufflerPage: React.FC = () => {
 
     setOutputText(result);
 
-    if (user) {
-      db.recordUsage(
-        user.id,
-        'text-shuffler',
-        'Text Shuffler',
-        1,
-        'Success',
-        `Mode: ${shuffleMode}`
-      );
-    }
-    showToast(`Shuffled text by ${shuffleMode}!`, 'success');
+    db.recordUsage(
+      user.id,
+      'text-shuffler',
+      'Text Shuffler',
+      1,
+      'Success',
+      `Mode: ${shuffleMode} (Free)`
+    );
+    showToast(`Shuffled text by ${shuffleMode} (Free)!`, 'success');
   };
 
   const loadSample = () => {
@@ -155,6 +160,9 @@ Monetag Smartlink Pre-lander Workflow`;
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   Fisher-Yates Algorithm
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  100% Free Tool
                 </span>
               </div>
               <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-2.5">
@@ -279,10 +287,10 @@ Monetag Smartlink Pre-lander Workflow`;
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-white/5">
           <button
             onClick={handleShuffle}
-            className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full sm:w-auto px-8 py-3.5 rounded-2xl font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-purple-600/30 cursor-pointer"
           >
             <Shuffle className="w-4 h-4" />
-            <span>Shuffle Now</span>
+            <span>Shuffle Now (Free)</span>
           </button>
 
           <div className="flex items-center gap-2.5 w-full sm:w-auto">

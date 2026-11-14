@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useRouter } from '../../context/RouterContext';
 import { useToast } from '../../components/ui/Toast';
 import { db } from '../../services/db';
 import {
@@ -32,6 +33,7 @@ import { BrowserIcons, InAppIcons, DeviceIcons } from '../../components/ui/Brand
 import { motion, AnimatePresence } from 'motion/react';
 import { ALL_COUNTRIES_WITH_GLOBAL, findCountryGeo } from '../../data/countries';
 import { useDbSync } from '../../hooks/useDbSync';
+import { PackageCreditGuard } from '../../components/ui/PackageCreditGuard';
 
 const DEFAULT_BROWSER_5_VERSIONS: Record<string, string[]> = {
   Chrome: ['124.0.6367.60', '123.0.6312.86', '122.0.6261.94', '121.0.6167.85', '120.0.6099.109'],
@@ -52,7 +54,8 @@ const DEFAULT_IN_APP_5_VERSIONS: Record<string, string[]> = {
 };
 
 export const UserAgentGeneratorPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const { navigate } = useRouter();
   const { showToast } = useToast();
 
   const devices = ['iPhone', 'iPad', 'Android', 'Windows', 'macOS'] as const;
@@ -123,6 +126,10 @@ export const UserAgentGeneratorPage: React.FC = () => {
   const deviceStats = db.getUserAgentStatsByDevice();
   const selectedDeviceStats = deviceStats[device];
   const selectedDeviceAvailable = selectedDeviceStats.available;
+  const requestedQty = Math.min(1000, Math.max(1, Number(quantity) || 1));
+  const effectiveCreditsNeeded =
+    selectedDeviceAvailable > 0 ? Math.min(selectedDeviceAvailable, requestedQty) : requestedQty;
+  const creditAccess = db.canUseTool(user?.id, effectiveCreditsNeeded);
 
   // Filter Safari: Show Safari only for iPhone, iPad, macOS. Hide for Windows and Android.
   const availableBrowsers = browsers.filter(b => {
@@ -185,7 +192,19 @@ export const UserAgentGeneratorPage: React.FC = () => {
   // Generation & Admin Pool Consumption Handler
   const handleGenerate = () => {
     if (!user) {
-      showToast('Please sign in to generate user agents.', 'error');
+      showToast('Please sign in and take a package first to generate user agents.', 'error');
+      navigate('/signin');
+      return;
+    }
+
+    const plannedQty = Math.min(1000, Math.max(1, Number(quantity) || 1));
+    const qty = selectedDeviceAvailable > 0 ? Math.min(selectedDeviceAvailable, plannedQty) : plannedQty;
+    const access = db.canUseTool(user.id, qty);
+    if (!access.allowed) {
+      showToast(access.reason || 'Please take a package first to generate User Agents!', 'error');
+      if (!access.hasUsablePackage) {
+        navigate('/payment');
+      }
       return;
     }
 
@@ -194,7 +213,6 @@ export const UserAgentGeneratorPage: React.FC = () => {
       return;
     }
 
-    const qty = Math.min(selectedDeviceAvailable, Math.min(1000, Math.max(1, Number(quantity) || 1)));
     setIsGenerating(true);
 
     try {
@@ -226,6 +244,7 @@ export const UserAgentGeneratorPage: React.FC = () => {
 
       setGeneratedResults(results);
       setMetaInfo({ fromPool: fromPoolCount, procedural: generatedCount });
+      refreshUser();
 
       // Record in usage history
       const versionTags: string[] = [];
@@ -247,7 +266,12 @@ export const UserAgentGeneratorPage: React.FC = () => {
         comboLabel
       );
 
-      showToast(`Generated ${results.length} authentic user agents (${fromPoolCount} retrieved & permanently cut from Admin Database Pool)!`, 'success');
+      showToast(
+        `Generated ${results.length} authentic user agents (${fromPoolCount} cut from pool${
+          access.isAdmin ? '' : ` · ${results.length} credits used`
+        })!`,
+        'success'
+      );
     } catch {
       showToast('Failed to generate user agents.', 'error');
     } finally {
@@ -399,6 +423,13 @@ export const UserAgentGeneratorPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* PACKAGE & CREDIT ENFORCEMENT BANNER */}
+      <PackageCreditGuard
+        userId={user?.id}
+        requiredCredits={effectiveCreditsNeeded}
+        creditUnitLabel="1 Credit per User Agent"
+      />
 
       {/* DYNAMIC ADMIN POOL STATUS BANNER */}
       {poolAvailable === 0 || selectedDeviceAvailable === 0 ? (
@@ -842,23 +873,31 @@ export const UserAgentGeneratorPage: React.FC = () => {
 
             {/* GENERATE TRIGGER BUTTON */}
             <motion.button
-              whileHover={{ scale: selectedDeviceAvailable > 0 ? 1.01 : 1 }}
-              whileTap={{ scale: selectedDeviceAvailable > 0 ? 0.98 : 1 }}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
               onClick={handleGenerate}
-              disabled={isGenerating || selectedDeviceAvailable === 0}
-              className={`w-full py-4 rounded-2xl font-extrabold text-xs tracking-wider uppercase shadow-xl flex items-center justify-center gap-3 transition-all ${
-                selectedDeviceAvailable === 0
-                  ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-60'
-                  : 'bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:via-blue-500 hover:to-indigo-500 text-slate-950 shadow-cyan-500/25 cursor-pointer'
+              disabled={isGenerating}
+              className={`w-full py-4 rounded-2xl font-extrabold text-xs tracking-wider uppercase shadow-xl flex items-center justify-center gap-3 transition-all cursor-pointer ${
+                !creditAccess.allowed
+                  ? 'bg-rose-950/70 hover:bg-rose-900/80 text-rose-200 border border-rose-500/40'
+                  : selectedDeviceAvailable === 0
+                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                  : 'bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:via-blue-500 hover:to-indigo-500 text-slate-950 shadow-cyan-500/25'
               }`}
             >
               <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
               <span>
                 {isGenerating
                   ? `Generating ${quantity} Signatures...`
+                  : !creditAccess.allowed
+                  ? creditAccess.hasUsablePackage
+                    ? `Insufficient Credits (${creditAccess.remainingCredits} left) — Click for Packages`
+                    : 'Package Required — Click to Take a Package'
                   : selectedDeviceAvailable === 0
                   ? `No ${device} User Agents in Pool`
-                  : `Generate & Cut ${Math.min(quantity, selectedDeviceAvailable)} ${device} UAs`}
+                  : `Generate & Cut ${effectiveCreditsNeeded} ${device} UAs${
+                      creditAccess.isAdmin ? '' : ` (${effectiveCreditsNeeded} Cr)`
+                    }`}
               </span>
             </motion.button>
           </div>

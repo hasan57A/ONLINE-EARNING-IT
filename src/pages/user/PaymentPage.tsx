@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useRouter } from '../../context/RouterContext';
 import { useToast } from '../../components/ui/Toast';
 import { useDbSync } from '../../hooks/useDbSync';
 import { db } from '../../services/db';
@@ -17,6 +18,7 @@ import {
   Sparkles,
   FileText,
   AlertCircle,
+  Coins,
 } from 'lucide-react';
 
 interface MethodTheme {
@@ -76,14 +78,26 @@ const PAYMENT_METHODS: MethodTheme[] = [
 export const PaymentPage: React.FC = () => {
   useDbSync();
   const { user, refreshUser } = useAuth();
+  const { queryParams } = useRouter();
   const { showToast } = useToast();
 
   const packages = db.getPaymentPackages();
   const gateways = db.getPaymentGateways();
   const myRequests = user ? db.getPaymentRequests(user.id) : [];
+  const requestedPkgId = queryParams.get('pkg');
 
-  const [selectedPkgId, setSelectedPkgId] = useState<string>(packages[1]?.id || packages[0]?.id || '');
+  const [selectedPkgId, setSelectedPkgId] = useState<string>(() => {
+    if (requestedPkgId && packages.some(p => p.id === requestedPkgId)) return requestedPkgId;
+    return packages[1]?.id || packages[0]?.id || '';
+  });
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('bKash');
+
+  useEffect(() => {
+    if (requestedPkgId && packages.some(p => p.id === requestedPkgId)) {
+      setSelectedPkgId(requestedPkgId);
+      setCustomAmount('');
+    }
+  }, [requestedPkgId]);
 
   const selectedPkg = packages.find(p => p.id === selectedPkgId) || packages[0];
   const methodMeta = PAYMENT_METHODS.find(m => m.id === selectedMethod) || PAYMENT_METHODS[0];
@@ -147,8 +161,12 @@ export const PaymentPage: React.FC = () => {
   };
 
   const latestUserRecord = user ? db.getUserById(user.id) || user : null;
+  const toolAccess = db.canUseTool(user?.id);
+  const isAdmin = latestUserRecord?.role === 'admin';
   const planStatus = latestUserRecord?.planStatus || 'none';
   const activePlan = latestUserRecord?.plan;
+  const userCredits = Math.max(0, Math.floor(Number(latestUserRecord?.credits ?? 0)));
+  const packageCreditTotal = toolAccess.packageCredits ?? userCredits;
 
   return (
     <div className="space-y-8">
@@ -163,21 +181,21 @@ export const PaymentPage: React.FC = () => {
             Plans & Payment Portal
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-            Select a membership plan and submit your payment via bKash, Nagad, Rocket, or Binance for fast approval.
+            Select a credit package and submit your payment via bKash, Nagad, Rocket, or Binance to unlock all 6 tools.
           </p>
         </div>
 
-        {/* Active / Pending Plan Status Card */}
+        {/* Active / Pending Plan & Credits Status Card */}
         <div
           className={`px-4 py-3 rounded-2xl border flex items-center gap-3 ${
-            planStatus === 'active'
+            isAdmin || (planStatus === 'active' && userCredits > 0)
               ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
               : planStatus === 'pending'
               ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
-              : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400'
+              : 'border-rose-500/30 bg-rose-500/10 text-rose-400'
           }`}
         >
-          {planStatus === 'active' ? (
+          {isAdmin || (planStatus === 'active' && userCredits > 0) ? (
             <ShieldCheck className="w-5 h-5 shrink-0" />
           ) : planStatus === 'pending' ? (
             <Clock className="w-5 h-5 shrink-0" />
@@ -185,13 +203,17 @@ export const PaymentPage: React.FC = () => {
             <Wallet className="w-5 h-5 shrink-0" />
           )}
           <div className="text-xs">
-            <p className="font-bold uppercase tracking-wider text-[10px] opacity-80">Account Plan Status</p>
+            <p className="font-bold uppercase tracking-wider text-[10px] opacity-80">Package & Credit Balance</p>
             <p className="font-bold text-slate-900 dark:text-white">
-              {planStatus === 'active' && activePlan
-                ? `${activePlan} · Active`
+              {isAdmin
+                ? 'Admin Unlimited · All Tools Unlocked'
+                : planStatus === 'active' && activePlan
+                ? `${activePlan} (${packageCreditTotal.toLocaleString()} Cr Pack) · ${userCredits.toLocaleString()} Left`
                 : planStatus === 'pending'
-                ? 'Verification Pending'
-                : 'Free / No Active Plan'}
+                ? `Pending: ${toolAccess.planName || 'Package'}${
+                    toolAccess.packageCredits ? ` (${toolAccess.packageCredits.toLocaleString()} Cr)` : ''
+                  } · ${userCredits.toLocaleString()} Credits`
+                : 'No Active Package · 0 Credits'}
             </p>
           </div>
         </div>
@@ -210,6 +232,10 @@ export const PaymentPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {packages.map(pkg => {
             const isSelected = pkg.id === selectedPkg?.id;
+            const isCurrentActive =
+              planStatus === 'active' &&
+              userCredits > 0 &&
+              activePlan?.toLowerCase() === pkg.name.toLowerCase();
             return (
               <button
                 key={pkg.id}
@@ -222,15 +248,26 @@ export const PaymentPage: React.FC = () => {
                 }`}
               >
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-blue-500">
                       {pkg.durationLabel}
                     </span>
-                    {isSelected && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-600 text-white">
-                        Selected
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                        <Coins className="w-3 h-3" />
+                        <span>{pkg.credits.toLocaleString()} Credits</span>
                       </span>
-                    )}
+                      {isCurrentActive && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white">
+                          Active Plan
+                        </span>
+                      )}
+                      {isSelected && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-600 text-white">
+                          Selected
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">{pkg.name}</h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">{pkg.description}</p>
@@ -549,6 +586,7 @@ export const PaymentPage: React.FC = () => {
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                   <th className="py-2.5 pr-4">Package</th>
+                  <th className="py-2.5 pr-4">Credits</th>
                   <th className="py-2.5 pr-4">Method</th>
                   <th className="py-2.5 pr-4">Amount</th>
                   <th className="py-2.5 pr-4">Sender</th>
@@ -565,10 +603,15 @@ export const PaymentPage: React.FC = () => {
                       : req.status === 'declined'
                       ? 'bg-rose-500/15 text-rose-500 border-rose-500/30'
                       : 'bg-amber-500/15 text-amber-500 border-amber-500/30';
+                  const matchedPkg = packages.find(p => p.id === req.packageId || p.name === req.packageName);
+                  const reqCredits = req.packageCredits ?? matchedPkg?.credits ?? 500;
                   return (
                     <tr key={req.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
                       <td className="py-3 pr-4 font-bold text-slate-900 dark:text-white whitespace-nowrap">
                         {req.packageName}
+                      </td>
+                      <td className="py-3 pr-4 font-mono font-bold text-amber-400 whitespace-nowrap tabular-nums">
+                        +{reqCredits.toLocaleString()}
                       </td>
                       <td className="py-3 pr-4 font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         {req.method}

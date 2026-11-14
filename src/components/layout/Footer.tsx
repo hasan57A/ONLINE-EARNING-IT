@@ -1,5 +1,5 @@
 import React from 'react';
-import { useRouter } from '../../context/RouterContext';
+import { useRouter, PLATFORM_LOGO_URL } from '../../context/RouterContext';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../services/db';
 import { Mail, Phone, Send, ExternalLink, ShieldCheck } from 'lucide-react';
@@ -21,7 +21,7 @@ export const Footer: React.FC = () => {
               className="flex items-center gap-2.5 cursor-pointer select-none"
             >
               <img
-                src="/assets/aistudio/Online_Earning_IT_Logo__e2215d9f_e2215d9f.png"
+                src={PLATFORM_LOGO_URL}
                 alt="ONLINE EARNING IT"
                 className="w-10 h-10 rounded-xl object-contain shadow-md"
               />

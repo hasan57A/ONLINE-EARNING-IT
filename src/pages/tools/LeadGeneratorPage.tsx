@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/ui/Toast';
-import { db } from '../../services/db';
+import { db, TOOL_CREDIT_COSTS } from '../../services/db';
 import {
   Users,
   Copy,
@@ -27,9 +27,10 @@ import { RealisticToolIcon } from '../../components/ui/RealisticIcon';
 import { motion, AnimatePresence } from 'motion/react';
 import { ALL_COUNTRIES_WITH_GLOBAL, findCountryGeo } from '../../data/countries';
 import { useDbSync } from '../../hooks/useDbSync';
+import { PackageCreditGuard } from '../../components/ui/PackageCreditGuard';
 
 export const LeadGeneratorPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { showToast } = useToast();
   useDbSync();
 
@@ -47,6 +48,10 @@ export const LeadGeneratorPage: React.FC = () => {
   const poolTotal = leadsPool.length;
   const poolConsumed = leadsPool.filter(l => l.used).length;
   const poolAvailable = poolTotal - poolConsumed;
+  const requestedQty = Math.min(100, Math.max(1, Number(quantity) || 1));
+  const effectiveItemsCount = poolAvailable > 0 ? Math.min(poolAvailable, requestedQty) : requestedQty;
+  const effectiveCreditsNeeded = effectiveItemsCount * TOOL_CREDIT_COSTS.LEAD;
+  const creditAccess = db.canUseTool(user?.id, effectiveCreditsNeeded);
 
   const filteredCountries = ALL_COUNTRIES_WITH_GLOBAL.filter(c => {
     const q = countrySearch.trim().toLowerCase();
@@ -71,6 +76,13 @@ export const LeadGeneratorPage: React.FC = () => {
     }
 
     const qty = Math.min(poolAvailable, Math.min(100, Math.max(1, Number(quantity) || 1)));
+    const creditsRequired = qty * TOOL_CREDIT_COSTS.LEAD;
+    const access = db.canUseTool(user.id, creditsRequired);
+    if (!access.allowed) {
+      showToast(access.reason || 'Active package and credits are required to generate Leads.', 'error');
+      return;
+    }
+
     setIsGenerating(true);
 
     try {
@@ -88,6 +100,7 @@ export const LeadGeneratorPage: React.FC = () => {
 
       setLeads(results);
       setFromPool(fromPoolCount);
+      refreshUser();
 
       db.recordUsage(
         user.id,
@@ -98,7 +111,12 @@ export const LeadGeneratorPage: React.FC = () => {
         `${country} · ${gender} · ${results.length} Leads`
       );
 
-      showToast(`Generated & cut ${results.length} leads from Admin Database Pool!`, 'success');
+      showToast(
+        `Generated & cut ${results.length} leads from Admin Database Pool${
+          access.isAdmin ? '' : ` (${results.length * TOOL_CREDIT_COSTS.LEAD} credits used)`
+        }!`,
+        'success'
+      );
     } catch {
       showToast('Failed to generate leads.', 'error');
     } finally {
@@ -210,6 +228,13 @@ export const LeadGeneratorPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Package & Credit Enforcement Banner */}
+      <PackageCreditGuard
+        userId={user?.id}
+        requiredCredits={effectiveCreditsNeeded}
+        creditUnitLabel="5 Credits per Lead"
+      />
 
       {/* Pool Status Banner */}
       {poolAvailable === 0 ? (
@@ -381,18 +406,24 @@ export const LeadGeneratorPage: React.FC = () => {
           {/* Generate Button */}
           <button
             onClick={handleGenerate}
-            disabled={isGenerating || poolAvailable === 0}
+            disabled={isGenerating || poolAvailable === 0 || !creditAccess.allowed}
             className={`w-full py-4 rounded-2xl font-bold text-sm shadow-xl flex items-center justify-center gap-2.5 transition-all ${
-              poolAvailable === 0
+              poolAvailable === 0 || !creditAccess.allowed
                 ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
                 : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/30 cursor-pointer'
             }`}
           >
             <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
             <span>
-              {poolAvailable === 0
+              {!creditAccess.allowed
+                ? creditAccess.hasActivePackage && creditAccess.remainingCredits > 0
+                  ? `Need ${effectiveCreditsNeeded} Cr (${creditAccess.remainingCredits} left)`
+                  : 'Package & Credits Required'
+                : poolAvailable === 0
                 ? 'Admin Must Upload Leads First'
-                : `Generate & Cut ${Math.min(quantity, poolAvailable)} Leads`}
+                : `Generate & Cut ${effectiveItemsCount} Leads${
+                    creditAccess.isAdmin ? '' : ` (${effectiveCreditsNeeded} Cr)`
+                  }`}
             </span>
           </button>
         </div>

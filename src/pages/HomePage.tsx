@@ -109,9 +109,9 @@ export const HomePage: React.FC = () => {
     },
     {
       num: '04',
-      title: 'Free Marketing Tools',
-      description: 'Enterprise-grade user agent generators, clean lead test pools, text normalizers, and formatting utilities with instant TXT / CSV exports.',
-      badge: '100% Free',
+      title: 'Pro Marketing Tools',
+      description: 'Enterprise-grade user agent generators, clean lead test pools, text normalizers, and formatting utilities powered by affordable credit packages.',
+      badge: 'Credit Powered',
       accent: 'from-purple-500/20 to-purple-600/5',
       border: 'border-purple-500/30',
     },
@@ -125,65 +125,17 @@ export const HomePage: React.FC = () => {
     },
   ];
 
-  const membershipPlans = [
-    {
-      name: 'Starter',
-      price: '500',
-      period: 'Monthly Tier',
-      description: 'Essential utility package for solo media buyers and emerging affiliate builders.',
-      features: [
-        'Full Access to All 6 Web Tools',
-        'Direct TXT / CSV Export Capabilities',
-        'Standard User Agent & Lead Pools',
-        'Community Forum & Resources Hub',
-        'Standard Ticket Support',
-      ],
-      popular: false,
-    },
-    {
-      name: 'Pro',
-      price: '1,000',
-      period: 'Monthly Tier',
-      description: 'Engineered for active media buyers driving steady multi-GEO ad traffic.',
-      features: [
-        'Priority Access to All 6 Web Tools',
-        'High-Volume 1,000 UA Batch Generator',
-        'Custom Web & In-App Version Engine',
-        'Expanded Tier-1 Country Datasets',
-        'Vetted CPA & Proxy Network Catalogs',
-        'Priority Email & Live Ticket Support',
-      ],
-      popular: true,
-    },
-    {
-      name: 'Business',
-      price: '2,000',
-      period: 'Monthly Tier',
-      description: 'Comprehensive solution designed for affiliate teams, agencies, and scale arbiters.',
-      features: [
-        'Unrestricted Tool Access & High Batching',
-        'Exclusive In-App Browser Mobile Profiles',
-        'Deep Resources Hub & Antidetect Guides',
-        'Lead Test Data Matrix & Dedicated QA',
-        'Fast-Track 24/7 Priority Support',
-      ],
-      popular: false,
-    },
-    {
-      name: 'Enterprise',
-      price: '5,000',
-      period: 'Bespoke Package',
-      description: 'Full-spectrum institutional grade resources, master datasets, and custom consultation.',
-      features: [
-        'All Master Utilities & Unlimited Batches',
-        'Custom Device & OS Signature Sets',
-        'Full Direct Database Pool Priority',
-        'Dedicated Technical Account Manager',
-        'VIP Direct Telegram & 1-on-1 Advisory',
-      ],
-      popular: false,
-    },
-  ];
+  const packages = db.getPaymentPackages();
+  const membershipPlans = packages.map((pkg, idx) => ({
+    name: pkg.name,
+    price: `৳${pkg.priceBdt.toLocaleString()}`,
+    usdt: `$${pkg.priceUsdt} USDT`,
+    credits: pkg.credits,
+    period: pkg.durationLabel,
+    description: pkg.description,
+    features: pkg.features,
+    popular: idx === 1,
+  }));
 
   const faqs = [
     {
@@ -191,8 +143,8 @@ export const HomePage: React.FC = () => {
       a: 'ONLINE EARNING IT is a comprehensive, modern platform providing digital marketers, media buyers, and developers with high-yield web tools (such as User Agent Generator with custom browser & in-app version control, Lead Generator, Text Shuffler, Duplicate Remover, and Number/Mail utilities) alongside curated catalogs of CPA networks, proxy providers, and antidetect browsers.',
     },
     {
-      q: 'Are the marketing tools completely free to use?',
-      a: 'Yes! Once registered, all 6 marketing tools on the platform are 100% accessible directly from your personal dashboard with instant generation, copying, downloading, and result-saving capabilities. There are no credit deducts, token limits, or hidden fees.',
+      q: 'How does the Package & Credit System work?',
+      a: 'Text Shuffler and Duplicate Text Remover are 100% Free. Generator tools require an active approved package and credits: User Agent (1 Credit), Number Generator (2 Credits), Mail Generator (3 Credits), and Lead Generator (5 Credits). Choose Starter Pass (500 Credits), Pro Marketer (1,500 Credits), or Agency Lifetime (10,000 Credits), submit your payment via bKash, Nagad, Rocket, or Binance, and start generating immediately once approved.',
     },
     {
       q: 'Can I customize both Browser and In-App Webview versions?',
@@ -287,7 +239,7 @@ export const HomePage: React.FC = () => {
                       onClick={() => navigate('/signup')}
                       className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm shadow-xl shadow-blue-600/30 flex items-center justify-center gap-2.5 transition-all cursor-pointer group"
                     >
-                      <span>Get Started Free</span>
+                      <span>Create Account</span>
                       <Sparkles className="w-4 h-4 text-amber-300 group-hover:rotate-12 transition-transform" />
                     </motion.button>
                     <button
@@ -311,7 +263,7 @@ export const HomePage: React.FC = () => {
               <div className="pt-4 flex flex-wrap items-center justify-center lg:justify-start gap-3 text-xs text-slate-400 font-medium">
                 <span className="flex items-center gap-1.5 text-slate-300">
                   <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  Zero Usage Limits
+                  Package Credit System
                 </span>
                 <span aria-hidden="true" className="text-slate-600">·</span>
                 <span className="flex items-center gap-1.5 text-slate-300">
@@ -584,8 +536,8 @@ export const HomePage: React.FC = () => {
               <p className="text-xs text-amber-300 font-semibold uppercase tracking-wider">Global Tier-1 GEOs</p>
             </div>
             <div className="p-4 rounded-2xl border border-emerald-500/20 bg-emerald-950/20 text-center space-y-1">
-              <span className="text-3xl sm:text-4xl font-black text-emerald-400 font-mono tracking-tight">100%</span>
-              <p className="text-xs text-emerald-300 font-semibold uppercase tracking-wider">Free Access</p>
+              <span className="text-3xl sm:text-4xl font-black text-emerald-400 font-mono tracking-tight">500+</span>
+              <p className="text-xs text-emerald-300 font-semibold uppercase tracking-wider">Starter Package Credits</p>
             </div>
           </div>
         </div>
@@ -657,10 +609,10 @@ export const HomePage: React.FC = () => {
                 Production Suite
               </span>
               <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-                Available Free Tools
+                Available Marketing Tools
               </h2>
               <p className="text-sm text-slate-400">
-                High-utility processors ready for high-speed batch generation with zero rate limits.
+                High-utility credit-powered processors unlocked with an active package for verified batch generation.
               </p>
             </div>
             <button
@@ -752,9 +704,9 @@ export const HomePage: React.FC = () => {
               <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shadow-md">
                 <Layers className="w-6 h-6" />
               </div>
-              <h3 className="text-lg font-bold text-white">Zero Usage Friction</h3>
+              <h3 className="text-lg font-bold text-white">Package & Credit Control</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
-                No credit balances, no token meters, and no rate throttling. Clean client-side performance built for heavy workloads.
+                Activate Starter, Pro, or Agency credit packages via bKash, Nagad, Rocket, or Binance with transparent per-item credit tracking.
               </p>
             </div>
 
@@ -796,17 +748,17 @@ export const HomePage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
           <div className="text-center space-y-3">
             <span className="text-xs font-bold text-blue-400 uppercase tracking-widest px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20">
-              Informational Packages
+              Tool Credit Packages
             </span>
             <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-              Membership Service Packages
+              Membership Credit Packages
             </h2>
             <p className="text-sm text-slate-400 max-w-xl mx-auto">
-              Informational service packages for solo media buyers, agile teams, and enterprise affiliates.
+              Choose a credit package to unlock User Agent (1 Cr), Number (2 Cr), Mail (3 Cr), and Lead (5 Cr) generators via bKash, Nagad, Rocket, or Binance. Text Shuffler & Duplicate Remover are free.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {membershipPlans.map(plan => (
               <motion.div
                 key={plan.name}
@@ -824,15 +776,23 @@ export const HomePage: React.FC = () => {
                   </div>
                 )}
                 <div className="space-y-5">
-                  <div>
-                    <h3 className="text-xl font-bold text-white">{plan.name}</h3>
-                    <p className="text-xs text-slate-400 mt-1">{plan.description}</p>
-                  </div>
-                  <div className="pt-2">
-                    <span className="text-4xl sm:text-5xl font-black text-white font-mono tabular-nums">
-                      {plan.price}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-xl font-bold text-white">{plan.name}</h3>
+                      <p className="text-xs text-slate-400 mt-1">{plan.description}</p>
+                    </div>
+                    <span className="shrink-0 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-mono font-bold">
+                      {plan.credits.toLocaleString()} Credits
                     </span>
-                    <span className="text-xs text-slate-400 ml-1.5 font-medium">{plan.period}</span>
+                  </div>
+                  <div className="pt-2 flex items-baseline justify-between">
+                    <div>
+                      <span className="text-4xl font-black text-white font-mono tabular-nums">
+                        {plan.price}
+                      </span>
+                      <span className="text-xs text-slate-400 ml-1.5 font-medium">{plan.period}</span>
+                    </div>
+                    <span className="text-sm font-bold text-amber-400 font-mono">{plan.usdt}</span>
                   </div>
                   <div className="space-y-2.5 pt-4 border-t border-white/10">
                     {plan.features.map(f => (
@@ -848,7 +808,7 @@ export const HomePage: React.FC = () => {
                   <button
                     onClick={() => {
                       if (isAuthenticated) {
-                        navigate('/dashboard');
+                        navigate('/payment');
                       } else {
                         navigate('/signup');
                       }

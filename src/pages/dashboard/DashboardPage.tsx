@@ -15,6 +15,8 @@ import {
   Sparkles,
   TrendingUp,
   CreditCard,
+  Coins,
+  Lock,
 } from 'lucide-react';
 import { RealisticToolIcon } from '../../components/ui/RealisticIcon';
 import { motion } from 'motion/react';
@@ -26,6 +28,9 @@ export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const currentUserRecord = user ? db.getUserById(user.id) || user : null;
+  const toolAccess = db.canUseTool(user?.id);
+  const isWorkspaceUnlocked = toolAccess.isAdmin || toolAccess.hasUsablePackage;
+  const packageCreditTotal = toolAccess.packageCredits ?? toolAccess.remainingCredits;
 
   const tools = db.getTools();
   const history = db.getUsageHistory(user?.id);
@@ -34,6 +39,20 @@ export const DashboardPage: React.FC = () => {
   const totalToolsAvailable = tools.filter(t => t.enabled).length;
   const totalToolsUsed = history.length;
   const totalSavedResults = savedResults.length;
+
+  const handleLockedNavigation = (featureName: string, targetPath: string) => {
+    if (!isWorkspaceUnlocked) {
+      showToast(
+        toolAccess.planStatus === 'pending'
+          ? `Your package payment is pending admin approval. "${featureName}" unlocks once approved.`
+          : `Please take a package first to unlock ${featureName}!`,
+        'error'
+      );
+      navigate('/payment');
+      return;
+    }
+    navigate(targetPath);
+  };
 
   // 7-day usage aggregation
   const sevenDayChartData = useMemo(() => {
@@ -55,11 +74,21 @@ export const DashboardPage: React.FC = () => {
   const maxChartCount = Math.max(1, ...sevenDayChartData.map(d => d.count));
 
   const copyToClipboard = (text: string) => {
+    if (!isWorkspaceUnlocked) {
+      showToast('Please take a package first to copy saved results!', 'error');
+      navigate('/payment');
+      return;
+    }
     navigator.clipboard.writeText(text);
     showToast('Copied saved results to clipboard!', 'success');
   };
 
   const downloadText = (filename: string, text: string) => {
+    if (!isWorkspaceUnlocked) {
+      showToast('Please take a package first to download saved results!', 'error');
+      navigate('/payment');
+      return;
+    }
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -98,23 +127,113 @@ export const DashboardPage: React.FC = () => {
           <div className="pt-1 flex flex-wrap items-center gap-3">
             <button
               onClick={() => navigate('/payment')}
-              className="px-4 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-400/30 text-xs font-bold text-blue-200 inline-flex items-center gap-2 transition-colors cursor-pointer"
+              className={`px-4 py-2 rounded-xl border text-xs font-bold inline-flex items-center gap-2 transition-colors cursor-pointer ${
+                toolAccess.isAdmin
+                  ? 'bg-emerald-600/20 hover:bg-emerald-600/30 border-emerald-400/30 text-emerald-200'
+                  : toolAccess.hasUsablePackage
+                  ? 'bg-blue-600/20 hover:bg-blue-600/30 border-blue-400/30 text-blue-200'
+                  : 'bg-rose-600/25 hover:bg-rose-600/35 border-rose-400/40 text-rose-200'
+              }`}
             >
-              <CreditCard className="w-3.5 h-3.5 text-blue-400" />
+              {isWorkspaceUnlocked ? (
+                <Coins className="w-3.5 h-3.5 text-amber-300" />
+              ) : (
+                <Lock className="w-3.5 h-3.5 text-rose-300" />
+              )}
               <span>
-                {currentUserRecord?.planStatus === 'active' && currentUserRecord.plan
-                  ? `${currentUserRecord.plan} · Active`
+                {toolAccess.isAdmin
+                  ? 'Admin Unlimited Access · All Tools Unlocked'
+                  : toolAccess.hasUsablePackage
+                  ? `${toolAccess.planName || 'Active Package'} (${packageCreditTotal.toLocaleString()} Cr Pack) · ${toolAccess.remainingCredits.toLocaleString()} Credits Left`
                   : currentUserRecord?.planStatus === 'pending'
-                  ? 'Payment Pending Approval'
-                  : 'Upgrade Plan (bKash / Nagad / Rocket / Binance)'}
+                  ? `Payment Pending (${toolAccess.planName || 'Package'}${
+                      toolAccess.packageCredits ? ` · ${toolAccess.packageCredits.toLocaleString()} Cr` : ''
+                    }) · Tools Locked`
+                  : 'Package Required · Click Here to Take a Package'}
               </span>
             </button>
+
+            {!toolAccess.isAdmin && toolAccess.hasUsablePackage && (
+              <button
+                onClick={() => navigate('/payment')}
+                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-xs font-bold text-white inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <CreditCard className="w-3.5 h-3.5 text-blue-300" />
+                <span>Top Up Credits</span>
+              </button>
+            )}
           </div>
         </div>
       </motion.div>
 
-      {/* KPI Stats Row (No credits/balance) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+      {/* Locked Account Alert Bar */}
+      {!isWorkspaceUnlocked && (
+        <div className="p-5 rounded-3xl border border-rose-500/40 bg-gradient-to-r from-rose-950/60 via-slate-900 to-slate-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
+          <div className="flex items-start gap-3.5">
+            <div className="p-2.5 rounded-xl bg-rose-500/20 text-rose-400 shrink-0 mt-0.5">
+              {toolAccess.planStatus === 'pending' ? <Clock className="w-5 h-5 text-amber-400" /> : <Lock className="w-5 h-5" />}
+            </div>
+            <div>
+              <h3 className="text-sm font-extrabold text-white">
+                {toolAccess.planStatus === 'pending'
+                  ? 'Package Approval Pending — Features Remain Locked'
+                  : 'No Active Package — Please Take a Package First'}
+              </h3>
+              <p className="text-xs text-slate-300 mt-1">
+                {toolAccess.planStatus === 'pending'
+                  ? 'Nothing works until Admin approves your pending package payment.'
+                  : 'All 6 tools, Resources, Usage History, and Saved Results stay locked until you take a package with credits.'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/payment')}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-extrabold inline-flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-lg shadow-blue-600/25"
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>{toolAccess.planStatus === 'pending' ? 'View Payment Status' : 'Take a Package Now'}</span>
+          </button>
+        </div>
+      )}
+
+      {/* KPI Stats Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <motion.div
+          whileHover={{ y: -4 }}
+          transition={{ duration: 0.2 }}
+          onClick={() => navigate('/payment')}
+          className={`p-6 rounded-3xl border bg-slate-900/80 hover:bg-slate-900 transition-all flex items-center gap-4 shadow-xl group cursor-pointer ${
+            isWorkspaceUnlocked
+              ? 'border-amber-500/30 hover:border-amber-400/60'
+              : 'border-rose-500/40 hover:border-rose-400/70'
+          }`}
+        >
+          <div
+            className={`w-14 h-14 rounded-2xl border flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-md ${
+              isWorkspaceUnlocked
+                ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                : 'bg-rose-500/15 border-rose-500/30 text-rose-400'
+            }`}
+          >
+            {isWorkspaceUnlocked ? <Coins className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Package Credits</p>
+            <p className="text-3xl font-black text-white font-mono tabular-nums mt-0.5 truncate">
+              {toolAccess.isAdmin ? 'Unlimited' : toolAccess.remainingCredits.toLocaleString()}
+            </p>
+            <p className="text-[11px] font-semibold text-amber-400 truncate mt-0.5">
+              {toolAccess.isAdmin
+                ? 'Admin Unlimited'
+                : toolAccess.hasUsablePackage
+                ? `${toolAccess.planName || 'Plan'} (${packageCreditTotal.toLocaleString()} Cr Pack)`
+                : toolAccess.planStatus === 'pending'
+                ? 'Approval Pending'
+                : 'No Package · Click to Take'}
+            </p>
+          </div>
+        </motion.div>
+
         <motion.div
           whileHover={{ y: -4 }}
           transition={{ duration: 0.2 }}
@@ -212,9 +331,10 @@ export const DashboardPage: React.FC = () => {
           <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
             <span>Telemetry updated live</span>
             <button
-              onClick={() => navigate('/history')}
+              onClick={() => handleLockedNavigation('Usage History', '/history')}
               className="text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 cursor-pointer"
             >
+              {!isWorkspaceUnlocked && <Lock className="w-3 h-3 text-rose-400" />}
               <span>View Usage Log</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
@@ -226,10 +346,11 @@ export const DashboardPage: React.FC = () => {
           <div className="flex items-center justify-between border-b border-white/5 pb-4">
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">Recent Activity</h2>
             <button
-              onClick={() => navigate('/history')}
-              className="text-xs text-blue-400 hover:underline font-bold cursor-pointer"
+              onClick={() => handleLockedNavigation('Usage History', '/history')}
+              className="text-xs text-blue-400 hover:underline font-bold cursor-pointer inline-flex items-center gap-1"
             >
-              View All
+              {!isWorkspaceUnlocked && <Lock className="w-3 h-3 text-rose-400" />}
+              <span>View All</span>
             </button>
           </div>
 
@@ -276,12 +397,17 @@ export const DashboardPage: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-white">Quick Access Tools</h2>
-            <p className="text-xs text-slate-400">Fast one-click access to all available utilities</p>
+            <p className="text-xs text-slate-400">
+              {isWorkspaceUnlocked
+                ? 'Fast one-click access to all available utilities'
+                : 'Locked until you take an active package — click any tool to choose a package'}
+            </p>
           </div>
           <button
-            onClick={() => navigate('/tools')}
+            onClick={() => handleLockedNavigation('All Tools', '/tools')}
             className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 cursor-pointer"
           >
+            {!isWorkspaceUnlocked && <Lock className="w-3 h-3 text-rose-400" />}
             <span>All 6 Tools</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
@@ -293,15 +419,26 @@ export const DashboardPage: React.FC = () => {
               key={tool.id}
               whileHover={{ y: -4 }}
               transition={{ duration: 0.2 }}
-              onClick={() => navigate(`/tools/${tool.slug}`)}
-              className="p-6 rounded-3xl border border-white/10 bg-slate-900/80 hover:border-blue-500/50 hover:bg-slate-900 transition-all cursor-pointer flex flex-col justify-between space-y-3.5 shadow-xl group"
+              onClick={() => handleLockedNavigation(tool.name, `/tools/${tool.slug}`)}
+              className={`p-6 rounded-3xl border bg-slate-900/80 hover:bg-slate-900 transition-all cursor-pointer flex flex-col justify-between space-y-3.5 shadow-xl group ${
+                isWorkspaceUnlocked
+                  ? 'border-white/10 hover:border-blue-500/50'
+                  : 'border-rose-500/20 hover:border-rose-500/50'
+              }`}
             >
               <div className="flex items-start justify-between">
                 <RealisticToolIcon slug={tool.slug} size="md" />
-                <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>Ready</span>
-                </span>
+                {isWorkspaceUnlocked ? (
+                  <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Ready</span>
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono font-bold text-rose-300 bg-rose-500/10 border border-rose-500/30 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                    <Lock className="w-3 h-3" />
+                    <span>Package Required</span>
+                  </span>
+                )}
               </div>
               <div>
                 <h3 className="text-base font-bold text-white group-hover:text-blue-300 transition-colors">
@@ -311,8 +448,14 @@ export const DashboardPage: React.FC = () => {
                   {tool.description}
                 </p>
               </div>
-              <div className="pt-2 flex items-center justify-between text-xs font-bold text-blue-400 group-hover:text-blue-300">
-                <span>Launch Tool</span>
+              <div
+                className={`pt-2 flex items-center justify-between text-xs font-bold ${
+                  isWorkspaceUnlocked
+                    ? 'text-blue-400 group-hover:text-blue-300'
+                    : 'text-rose-400 group-hover:text-rose-300'
+                }`}
+              >
+                <span>{isWorkspaceUnlocked ? 'Launch Tool' : 'Take Package to Unlock'}</span>
                 <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
               </div>
             </motion.div>
@@ -328,9 +471,10 @@ export const DashboardPage: React.FC = () => {
             <p className="text-xs text-slate-400">Exports and generator outputs you pinned for quick retrieval</p>
           </div>
           <button
-            onClick={() => navigate('/saved-results')}
+            onClick={() => handleLockedNavigation('Saved Results', '/saved-results')}
             className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 cursor-pointer"
           >
+            {!isWorkspaceUnlocked && <Lock className="w-3 h-3 text-rose-400" />}
             <span>View All ({savedResults.length})</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>

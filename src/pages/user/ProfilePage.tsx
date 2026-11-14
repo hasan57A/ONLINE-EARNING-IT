@@ -21,6 +21,8 @@ export const ProfilePage: React.FC = () => {
   const { navigate } = useRouter();
   const { showToast } = useToast();
   const latestUser = user ? db.getUserById(user.id) || user : null;
+  const toolAccess = db.canUseTool(user?.id);
+  const packageCreditTotal = toolAccess.packageCredits ?? toolAccess.remainingCredits;
 
   const [fullName, setFullName] = useState(user?.fullName || '');
   const [mobile, setMobile] = useState(user?.mobile || '');
@@ -121,20 +123,24 @@ export const ProfilePage: React.FC = () => {
             type="button"
             onClick={() => navigate('/payment')}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer border transition-colors ${
-              latestUser?.planStatus === 'active'
-                ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
+              toolAccess.isAdmin || toolAccess.hasUsablePackage
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                 : latestUser?.planStatus === 'pending'
-                ? 'bg-amber-500/10 text-amber-500 border-amber-500/30'
-                : 'bg-blue-500/10 text-blue-500 border-blue-500/30 hover:bg-blue-500/20'
+                ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                : 'bg-rose-500/10 text-rose-400 border-rose-500/30 hover:bg-rose-500/20'
             }`}
           >
             <CreditCard className="w-3.5 h-3.5" />
-            <span>
-              {latestUser?.planStatus === 'active' && latestUser.plan
-                ? `${latestUser.plan} (Active)`
+            <span className="font-mono">
+              {toolAccess.isAdmin
+                ? 'Admin Unlimited'
+                : toolAccess.hasUsablePackage
+                ? `${toolAccess.planName || 'Plan'} (${packageCreditTotal.toLocaleString()} Cr Pack) · ${toolAccess.remainingCredits.toLocaleString()} Left`
                 : latestUser?.planStatus === 'pending'
-                ? 'Plan Pending Verification'
-                : 'Activate Plan'}
+                ? `Pending: ${toolAccess.planName || 'Package'}${
+                    toolAccess.packageCredits ? ` (${toolAccess.packageCredits.toLocaleString()} Cr)` : ''
+                  }`
+                : 'No Package · 0 Credits (Take Package)'}
             </span>
           </button>
 

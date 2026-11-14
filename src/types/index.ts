@@ -12,6 +12,7 @@ export interface User {
   status: UserStatus;
   plan?: string;
   planStatus?: 'none' | 'pending' | 'active';
+  credits?: number;
   planUpdatedAt?: string;
   createdAt: string;
   updatedAt?: string;
@@ -25,6 +26,7 @@ export interface PaymentPackage {
   name: string;
   priceBdt: number;
   priceUsdt: number;
+  credits: number;
   durationLabel: string;
   description: string;
   features: string[];
@@ -50,6 +52,7 @@ export interface PaymentRequest {
   userEmail: string;
   packageId: string;
   packageName: string;
+  packageCredits?: number;
   method: PaymentMethod;
   currency: 'BDT' | 'USDT';
   amount: number;

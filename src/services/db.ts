@@ -135,33 +135,45 @@ const DEFAULT_PAYMENT_GATEWAYS: PaymentGatewaySettings = {
     'Send the exact package amount to the active wallet/number above, then submit your Sender Number / Pay ID and Transaction ID (TrxID) for admin verification.',
 };
 
+export const TOOL_CREDIT_COSTS = {
+  UA: 1,
+  LEAD: 5,
+  NUMBER: 2,
+  MAIL: 3,
+  TEXT_SHUFFLER: 0,
+  DUPLICATE_REMOVER: 0,
+} as const;
+
 const DEFAULT_PAYMENT_PACKAGES: PaymentPackage[] = [
   {
     id: 'pkg_starter',
     name: 'Starter Pass',
     priceBdt: 500,
     priceUsdt: 5,
+    credits: 500,
     durationLabel: '30 Days',
-    description: 'Essential access to admin-verified User Agent, Lead, Number & Mail generation pools.',
-    features: ['All 6 Marketing Tools Access', 'Global GEO & Language Targeting', '5-Version Cycling Engine'],
+    description: 'Essential package with 500 credits for User Agent, Number, Mail & Lead tools.',
+    features: ['500 Tool Credits Included', 'All Generator Tools Access', 'Global GEO & Language Targeting'],
   },
   {
     id: 'pkg_pro',
     name: 'Pro Marketer',
     priceBdt: 1200,
     priceUsdt: 12,
+    credits: 1500,
     durationLabel: '90 Days',
-    description: 'Extended campaign toolkit designed for active media buyers and CPA marketers.',
-    features: ['Priority Pool Allocation', 'Multi-Device UA Batching', 'Full Saved Results Archive'],
+    description: 'Extended campaign toolkit with 1,500 credits for active media buyers and CPA marketers.',
+    features: ['1,500 Tool Credits Included', 'Priority Pool Allocation', 'Multi-Device UA Batching & Exports'],
   },
   {
     id: 'pkg_agency',
     name: 'Agency Lifetime',
     priceBdt: 2500,
     priceUsdt: 25,
+    credits: 10000,
     durationLabel: '1 Year',
-    description: 'Maximum operational scale for affiliate teams and high-volume traffic arbitrage.',
-    features: ['Unlimited Workflow Exports', 'Dedicated Support Channel', 'Full Resource Directory Access'],
+    description: 'Maximum operational scale with 10,000 credits for affiliate teams and high-volume traffic.',
+    features: ['10,000 Tool Credits Included', 'High-Volume Batch Generations', 'Dedicated Support Channel'],
   },
 ];
 
@@ -209,7 +221,7 @@ interface TableCfg {
 const TABLES: Record<string, TableCfg> = {
   [STORAGE_KEYS.USERS]: {
     table: 'profiles', kind: 'list', noInsert: true, noDelete: true,
-    cols: ['id', 'full_name', 'mobile', 'gmail', 'role', 'status', 'plan', 'plan_status', 'plan_updated_at', 'created_at', 'updated_at'],
+    cols: ['id', 'full_name', 'mobile', 'gmail', 'role', 'status', 'plan', 'plan_status', 'credits', 'plan_updated_at', 'created_at', 'updated_at'],
     order: { col: 'created_at', asc: true },
   },
   [STORAGE_KEYS.TOOLS]: {
@@ -282,7 +294,7 @@ const TABLES: Record<string, TableCfg> = {
   },
   [STORAGE_KEYS.PAYMENT_REQUESTS]: {
     table: 'payment_requests', kind: 'list',
-    cols: ['id', 'user_id', 'user_name', 'user_email', 'package_id', 'package_name', 'method', 'currency', 'amount', 'sender_account', 'transaction_id', 'note', 'status', 'admin_note', 'reviewed_by', 'reviewed_at', 'created_at'],
+    cols: ['id', 'user_id', 'user_name', 'user_email', 'package_id', 'package_name', 'package_credits', 'method', 'currency', 'amount', 'sender_account', 'transaction_id', 'note', 'status', 'admin_note', 'reviewed_by', 'reviewed_at', 'created_at'],
     order: { col: 'created_at', asc: false },
   },
 };
@@ -761,6 +773,205 @@ class DatabaseService {
     return { success: true };
   }
 
+  // --- Package & Credit Access Enforcement ---
+  public canUseTool(
+    userId?: string,
+    requiredCredits: number = 1
+  ): {
+    allowed: boolean;
+    isAdmin: boolean;
+    hasActivePackage: boolean;
+    hasUsablePackage: boolean;
+    remainingCredits: number;
+    packageCredits?: number;
+    planName?: string;
+    planStatus: 'none' | 'pending' | 'active';
+    reason?: string;
+  } {
+    const base = this.evaluateToolAccess(userId, requiredCredits);
+    const hasUsablePackage = base.isAdmin || (base.planStatus === 'active' && base.remainingCredits > 0);
+
+    let packageCredits: number | undefined;
+    if (!base.isAdmin) {
+      const user = (userId ? this.getUserById(userId) : null) || this.getCurrentUser();
+      const matched = DEFAULT_PAYMENT_PACKAGES.find(p => p.name === base.planName);
+      if (base.planStatus === 'pending' && user) {
+        const pendingReq = this.getPaymentRequests().find(r => r.userId === user.id && r.status === 'pending');
+        const pendingPkg = pendingReq
+          ? DEFAULT_PAYMENT_PACKAGES.find(p => p.id === pendingReq.packageId || p.name === pendingReq.packageName)
+          : undefined;
+        packageCredits = pendingReq?.packageCredits ?? pendingPkg?.credits ?? matched?.credits;
+      } else if (base.planStatus === 'active') {
+        packageCredits = Math.max(matched?.credits ?? 0, base.remainingCredits) || undefined;
+      }
+    }
+    return { ...base, hasUsablePackage, packageCredits };
+  }
+
+  private evaluateToolAccess(
+    userId?: string,
+    requiredCredits: number = 1
+  ): {
+    allowed: boolean;
+    isAdmin: boolean;
+    hasActivePackage: boolean;
+    remainingCredits: number;
+    planName?: string;
+    planStatus: 'none' | 'pending' | 'active';
+    reason?: string;
+  } {
+    const user = (userId ? this.getUserById(userId) : null) || this.getCurrentUser();
+    if (!user) {
+      return {
+        allowed: false,
+        isAdmin: false,
+        hasActivePackage: false,
+        remainingCredits: 0,
+        planStatus: 'none',
+        reason: 'Please sign in to access marketing tools.',
+      };
+    }
+
+    if (user.role === 'admin') {
+      return {
+        allowed: true,
+        isAdmin: true,
+        hasActivePackage: true,
+        remainingCredits: 999999,
+        planName: 'Admin Unlimited',
+        planStatus: 'active',
+      };
+    }
+
+    const planStatus: 'none' | 'pending' | 'active' = user.planStatus || 'none';
+    const remainingCredits = Math.max(0, Math.floor(Number(user.credits ?? 0)));
+
+    if (planStatus !== 'active') {
+      return {
+        allowed: false,
+        isAdmin: false,
+        hasActivePackage: false,
+        remainingCredits,
+        planName: user.plan,
+        planStatus,
+        reason:
+          planStatus === 'pending'
+            ? 'Your package payment is pending admin approval. Tools will unlock as soon as it is approved.'
+            : 'Active Package Required! Without an active package and credits, tools cannot generate.',
+      };
+    }
+
+    if (remainingCredits <= 0) {
+      return {
+        allowed: false,
+        isAdmin: false,
+        hasActivePackage: true,
+        remainingCredits: 0,
+        planName: user.plan,
+        planStatus,
+        reason: 'Your package credits are finished (0 Credits remaining). Please purchase a package to continue generating.',
+      };
+    }
+
+    if (remainingCredits < requiredCredits) {
+      return {
+        allowed: false,
+        isAdmin: false,
+        hasActivePackage: true,
+        remainingCredits,
+        planName: user.plan,
+        planStatus,
+        reason: `Insufficient credits: ${requiredCredits} required, but only ${remainingCredits} credits remaining. Lower your quantity or buy another package.`,
+      };
+    }
+
+    return {
+      allowed: true,
+      isAdmin: false,
+      hasActivePackage: true,
+      remainingCredits,
+      planName: user.plan,
+      planStatus,
+    };
+  }
+
+  public deductUserCredits(
+    userId: string,
+    amount: number
+  ): { success: boolean; remainingCredits: number; error?: string } {
+    const users = this.getUsers();
+    const idx = users.findIndex(u => u.id === userId);
+    const current = this.getCurrentUser();
+    const targetUser = idx !== -1 ? users[idx] : current && current.id === userId ? current : null;
+
+    if (!targetUser) {
+      return { success: false, remainingCredits: 0, error: 'User account not found.' };
+    }
+    if (targetUser.role === 'admin') {
+      return { success: true, remainingCredits: 999999 };
+    }
+    if (targetUser.planStatus !== 'active') {
+      return { success: false, remainingCredits: 0, error: 'Active package required.' };
+    }
+
+    const cleanAmount = Math.max(1, Math.floor(amount));
+    const currentCredits = Math.max(0, Math.floor(Number(targetUser.credits ?? 0)));
+    if (currentCredits < cleanAmount) {
+      return {
+        success: false,
+        remainingCredits: currentCredits,
+        error: `Insufficient credits (${currentCredits} available, ${cleanAmount} needed).`,
+      };
+    }
+
+    const nextCredits = currentCredits - cleanAmount;
+    const nowIso = new Date().toISOString();
+
+    if (idx !== -1) {
+      users[idx].credits = nextCredits;
+      users[idx].updatedAt = nowIso;
+      this.setItem(STORAGE_KEYS.USERS, users);
+    }
+    if (current && current.id === userId) {
+      this.setCurrentUser({ ...current, credits: nextCredits, updatedAt: nowIso });
+    }
+
+    return { success: true, remainingCredits: nextCredits };
+  }
+
+  public adminUpdateUserPackageAndCredits(
+    userId: string,
+    credits: number,
+    planName?: string,
+    planStatus?: 'none' | 'pending' | 'active'
+  ): { success: boolean; error?: string } {
+    const users = this.getUsers();
+    const idx = users.findIndex(u => u.id === userId);
+    if (idx === -1) return { success: false, error: 'User not found.' };
+
+    const cleanCredits = Math.max(0, Math.min(10000000, Math.floor(Number(credits) || 0)));
+    const nextPlanStatus = planStatus ?? (cleanCredits > 0 ? 'active' : users[idx].planStatus || 'none');
+    const nextPlan = planName !== undefined ? planName.trim() : users[idx].plan || (nextPlanStatus === 'active' ? 'Starter Pass' : undefined);
+    const nowIso = new Date().toISOString();
+
+    users[idx].credits = cleanCredits;
+    users[idx].planStatus = nextPlanStatus;
+    if (nextPlan !== undefined) {
+      users[idx].plan = nextPlan;
+      users[idx].planUpdatedAt = nowIso;
+    }
+    users[idx].updatedAt = nowIso;
+    this.setItem(STORAGE_KEYS.USERS, users);
+
+    const current = this.getCurrentUser();
+    if (current && current.id === userId) {
+      this.setCurrentUser(users[idx]);
+    }
+
+
+    return { success: true };
+  }
+
     // --- Tools Management ---
   public getTools(): ToolItem[] {
     return this.getItem<ToolItem[]>(STORAGE_KEYS.TOOLS, DEFAULT_TOOLS);
@@ -797,7 +1008,7 @@ class DatabaseService {
   public addMultipleUserAgents(entries: Array<Omit<UserAgentEntry, 'id' | 'used' | 'createdAt'>>): void {
     const pool = this.getUserAgents();
     const now = Date.now();
-    const formatted = entries.map((e, idx) => ({
+    const formatted: UserAgentEntry[] = entries.map((e, idx) => ({
       ...e,
       id: `ua_${now}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
       used: false,
@@ -816,11 +1027,14 @@ class DatabaseService {
     statusFilter: 'all' | 'available' | 'used' = 'all'
   ): number {
     const pool = this.getUserAgents();
+    const removedIds: string[] = [];
     const kept = pool.filter(u => {
       const deviceMatches = deviceFilter === 'All' ? true : u.device === deviceFilter;
       const statusMatches =
         statusFilter === 'available' ? !u.used : statusFilter === 'used' ? u.used : true;
-      return !(deviceMatches && statusMatches);
+      const shouldRemove = deviceMatches && statusMatches;
+      if (shouldRemove) removedIds.push(u.id);
+      return !shouldRemove;
     });
     const removedCount = pool.length - kept.length;
     this.setItem(STORAGE_KEYS.UA_POOL, kept);
@@ -828,6 +1042,7 @@ class DatabaseService {
   }
 
   public deleteAllUserAgents(): void {
+    const allIds = this.getUserAgents().map(u => u.id);
     this.setItem(STORAGE_KEYS.UA_POOL, []);
   }
 
@@ -851,6 +1066,16 @@ class DatabaseService {
       isInAppVersionOn?: boolean;
     }
   ): { results: string[]; fromPoolCount: number; generatedCount: number; error?: string } {
+    const access = this.canUseTool(userId, Math.max(1, Math.min(1000, filters.quantity || 1)));
+    if (!access.allowed) {
+      return {
+        results: [],
+        fromPoolCount: 0,
+        generatedCount: 0,
+        error: access.reason || 'Active package and credits are required to generate User Agents.',
+      };
+    }
+
     const pool = this.getUserAgents();
 
     // Strict requirement: Only generate from admin-uploaded pool entries.
@@ -1073,6 +1298,7 @@ class DatabaseService {
       return updated;
     });
 
+    this.deductUserCredits(userId, results.length);
     return { results, fromPoolCount: matching.length, generatedCount: 0 };
   }
 
@@ -1119,7 +1345,7 @@ class DatabaseService {
   public addMultipleLeads(entries: Array<Omit<LeadEntry, 'id' | 'used' | 'createdAt'>>): void {
     const pool = this.getLeads();
     const now = Date.now();
-    const formatted = entries.map((e, idx) => ({
+    const formatted: LeadEntry[] = entries.map((e, idx) => ({
       ...e,
       id: `ld_${now}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
       used: false,
@@ -1135,12 +1361,14 @@ class DatabaseService {
 
   public deleteUsedLeads(): number {
     const pool = this.getLeads();
+    const usedIds = pool.filter(l => l.used).map(l => l.id);
     const kept = pool.filter(l => !l.used);
     this.setItem(STORAGE_KEYS.LEADS_POOL, kept);
     return pool.length - kept.length;
   }
 
   public deleteAllLeads(): void {
+    const allIds = this.getLeads().map(l => l.id);
     this.setItem(STORAGE_KEYS.LEADS_POOL, []);
   }
 
@@ -1153,6 +1381,17 @@ class DatabaseService {
     generatedCount: number;
     error?: string;
   } {
+    const targetQty = Math.max(1, Math.min(100, filters.quantity || 1));
+    const minAccess = this.canUseTool(userId, TOOL_CREDIT_COSTS.LEAD);
+    if (!minAccess.allowed) {
+      return {
+        results: [],
+        fromPoolCount: 0,
+        generatedCount: 0,
+        error: minAccess.reason || 'Active package and credits (5 Credits/Lead) are required to generate Leads.',
+      };
+    }
+
     const pool = this.getLeads();
     const availablePool = pool.filter(l => !l.used);
     if (availablePool.length === 0) {
@@ -1164,14 +1403,24 @@ class DatabaseService {
       };
     }
 
+    const effectiveQty = Math.min(targetQty, availablePool.length);
+    const batchAccess = this.canUseTool(userId, effectiveQty * TOOL_CREDIT_COSTS.LEAD);
+    if (!batchAccess.allowed) {
+      return {
+        results: [],
+        fromPoolCount: 0,
+        generatedCount: 0,
+        error: batchAccess.reason || `Insufficient credits: ${effectiveQty * TOOL_CREDIT_COSTS.LEAD} Credits required.`,
+      };
+    }
+
     const matching: LeadEntry[] = [];
     const remaining: LeadEntry[] = [];
-    const targetQty = Math.max(1, Math.min(100, filters.quantity));
 
     const isGlobalCountry = !filters.country || filters.country === 'Any' || filters.country === 'All Countries';
 
     for (const item of pool) {
-      if (matching.length < targetQty && !item.used) {
+      if (matching.length < effectiveQty && !item.used) {
         let match = true;
         if (!isGlobalCountry && item.country !== filters.country) match = false;
         if (filters.gender !== 'Mix' && item.gender !== filters.gender) match = false;
@@ -1188,10 +1437,10 @@ class DatabaseService {
     }
 
     // If specific country/gender matching count is smaller than target, fill with any available unused pool items
-    if (matching.length < targetQty) {
+    if (matching.length < effectiveQty) {
       for (let i = 0; i < remaining.length; i++) {
         const item = remaining[i];
-        if (!item.used && matching.length < targetQty) {
+        if (!item.used && matching.length < effectiveQty) {
           item.used = true;
           item.usedBy = userId;
           item.usedAt = new Date().toISOString();
@@ -1222,6 +1471,7 @@ class DatabaseService {
       phoneNumber: m.phoneNumber,
     }));
 
+    this.deductUserCredits(userId, results.length * TOOL_CREDIT_COSTS.LEAD);
     return { results, fromPoolCount: matching.length, generatedCount: 0 };
   }
 
@@ -1232,19 +1482,20 @@ class DatabaseService {
 
   public addNumber(num: Omit<NumberEntry, 'id' | 'used' | 'createdAt'>): void {
     const pool = this.getNumbers();
-    pool.push({
+    const newEntry: NumberEntry = {
       ...num,
       id: 'num_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
       used: false,
       createdAt: new Date().toISOString(),
-    });
+    };
+    pool.push(newEntry);
     this.setItem(STORAGE_KEYS.NUMBERS_POOL, pool);
   }
 
   public addMultipleNumbers(entries: Array<Omit<NumberEntry, 'id' | 'used' | 'createdAt'>>): void {
     const pool = this.getNumbers();
     const now = Date.now();
-    const formatted = entries.map((e, idx) => ({
+    const formatted: NumberEntry[] = entries.map((e, idx) => ({
       ...e,
       id: `num_${now}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
       used: false,
@@ -1259,12 +1510,14 @@ class DatabaseService {
 
   public deleteUsedNumbers(): number {
     const pool = this.getNumbers();
+    const usedIds = pool.filter(n => n.used).map(n => n.id);
     const kept = pool.filter(n => !n.used);
     this.setItem(STORAGE_KEYS.NUMBERS_POOL, kept);
     return pool.length - kept.length;
   }
 
   public deleteAllNumbers(): void {
+    const allIds = this.getNumbers().map(n => n.id);
     this.setItem(STORAGE_KEYS.NUMBERS_POOL, []);
   }
 
@@ -1273,6 +1526,17 @@ class DatabaseService {
     country: string,
     quantity: number
   ): { results: string[]; fromPoolCount: number; generatedCount: number; error?: string } {
+    const targetQty = Math.max(1, Math.min(100, quantity || 1));
+    const minAccess = this.canUseTool(userId, TOOL_CREDIT_COSTS.NUMBER);
+    if (!minAccess.allowed) {
+      return {
+        results: [],
+        fromPoolCount: 0,
+        generatedCount: 0,
+        error: minAccess.reason || 'Active package and credits (2 Credits/Number) are required to generate Numbers.',
+      };
+    }
+
     const pool = this.getNumbers();
     const availablePool = pool.filter(n => !n.used);
     if (availablePool.length === 0) {
@@ -1284,14 +1548,24 @@ class DatabaseService {
       };
     }
 
+    const effectiveQty = Math.min(targetQty, availablePool.length);
+    const batchAccess = this.canUseTool(userId, effectiveQty * TOOL_CREDIT_COSTS.NUMBER);
+    if (!batchAccess.allowed) {
+      return {
+        results: [],
+        fromPoolCount: 0,
+        generatedCount: 0,
+        error: batchAccess.reason || `Insufficient credits: ${effectiveQty * TOOL_CREDIT_COSTS.NUMBER} Credits required.`,
+      };
+    }
+
     const matching: NumberEntry[] = [];
     const remaining: NumberEntry[] = [];
-    const targetQty = Math.max(1, Math.min(100, quantity));
 
     const isGlobalCountry = !country || country === 'Any' || country === 'All Countries';
 
     for (const item of pool) {
-      if (matching.length < targetQty && !item.used && (isGlobalCountry || item.country === country)) {
+      if (matching.length < effectiveQty && !item.used && (isGlobalCountry || item.country === country)) {
         item.used = true;
         item.usedBy = userId;
         item.usedAt = new Date().toISOString();
@@ -1302,10 +1576,10 @@ class DatabaseService {
     }
 
     // If exact country match didn't yield enough, pick from any remaining unused numbers in the pool
-    if (matching.length < targetQty) {
+    if (matching.length < effectiveQty) {
       for (let i = 0; i < remaining.length; i++) {
         const item = remaining[i];
-        if (!item.used && matching.length < targetQty) {
+        if (!item.used && matching.length < effectiveQty) {
           item.used = true;
           item.usedBy = userId;
           item.usedAt = new Date().toISOString();
@@ -1330,6 +1604,7 @@ class DatabaseService {
     }
 
     const results = matching.map(m => m.phoneNumber);
+    this.deductUserCredits(userId, results.length * TOOL_CREDIT_COSTS.NUMBER);
     return { results, fromPoolCount: matching.length, generatedCount: 0 };
   }
 
@@ -1340,19 +1615,20 @@ class DatabaseService {
 
   public addMail(mail: Omit<MailEntry, 'id' | 'used' | 'createdAt'>): void {
     const pool = this.getMails();
-    pool.push({
+    const newEntry: MailEntry = {
       ...mail,
       id: 'ml_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
       used: false,
       createdAt: new Date().toISOString(),
-    });
+    };
+    pool.push(newEntry);
     this.setItem(STORAGE_KEYS.MAILS_POOL, pool);
   }
 
   public addMultipleMails(entries: Array<Omit<MailEntry, 'id' | 'used' | 'createdAt'>>): void {
     const pool = this.getMails();
     const now = Date.now();
-    const formatted = entries.map((e, idx) => ({
+    const formatted: MailEntry[] = entries.map((e, idx) => ({
       ...e,
       id: `ml_${now}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
       used: false,
@@ -1367,12 +1643,14 @@ class DatabaseService {
 
   public deleteUsedMails(): number {
     const pool = this.getMails();
+    const usedIds = pool.filter(m => m.used).map(m => m.id);
     const kept = pool.filter(m => !m.used);
     this.setItem(STORAGE_KEYS.MAILS_POOL, kept);
     return pool.length - kept.length;
   }
 
   public deleteAllMails(): void {
+    const allIds = this.getMails().map(m => m.id);
     this.setItem(STORAGE_KEYS.MAILS_POOL, []);
   }
 
@@ -1381,6 +1659,17 @@ class DatabaseService {
     country: string,
     quantity: number
   ): { results: string[]; fromPoolCount: number; generatedCount: number; error?: string } {
+    const targetQty = Math.max(1, Math.min(100, quantity || 1));
+    const minAccess = this.canUseTool(userId, TOOL_CREDIT_COSTS.MAIL);
+    if (!minAccess.allowed) {
+      return {
+        results: [],
+        fromPoolCount: 0,
+        generatedCount: 0,
+        error: minAccess.reason || 'Active package and credits (3 Credits/Email) are required to generate Emails.',
+      };
+    }
+
     const pool = this.getMails();
     const availablePool = pool.filter(m => !m.used);
     if (availablePool.length === 0) {
@@ -1392,14 +1681,24 @@ class DatabaseService {
       };
     }
 
+    const effectiveQty = Math.min(targetQty, availablePool.length);
+    const batchAccess = this.canUseTool(userId, effectiveQty * TOOL_CREDIT_COSTS.MAIL);
+    if (!batchAccess.allowed) {
+      return {
+        results: [],
+        fromPoolCount: 0,
+        generatedCount: 0,
+        error: batchAccess.reason || `Insufficient credits: ${effectiveQty * TOOL_CREDIT_COSTS.MAIL} Credits required.`,
+      };
+    }
+
     const matching: MailEntry[] = [];
     const remaining: MailEntry[] = [];
-    const targetQty = Math.max(1, Math.min(100, quantity));
 
     const isGlobalCountry = !country || country === 'Any' || country === 'All Countries';
 
     for (const item of pool) {
-      if (matching.length < targetQty && !item.used && (isGlobalCountry || item.country === country)) {
+      if (matching.length < effectiveQty && !item.used && (isGlobalCountry || item.country === country)) {
         item.used = true;
         item.usedBy = userId;
         item.usedAt = new Date().toISOString();
@@ -1410,10 +1709,10 @@ class DatabaseService {
     }
 
     // If exact country match didn't yield enough, pick from any remaining unused emails in the pool
-    if (matching.length < targetQty) {
+    if (matching.length < effectiveQty) {
       for (let i = 0; i < remaining.length; i++) {
         const item = remaining[i];
-        if (!item.used && matching.length < targetQty) {
+        if (!item.used && matching.length < effectiveQty) {
           item.used = true;
           item.usedBy = userId;
           item.usedAt = new Date().toISOString();
@@ -1438,6 +1737,7 @@ class DatabaseService {
     }
 
     const results = matching.map(m => m.email);
+    this.deductUserCredits(userId, results.length * TOOL_CREDIT_COSTS.MAIL);
     return { results, fromPoolCount: matching.length, generatedCount: 0 };
   }
 
@@ -1796,11 +2096,12 @@ class DatabaseService {
 
   public saveCpaNetwork(item: CpaNetwork): void {
     const list = this.getCpaNetworks();
-    const idx = list.findIndex(c => c.id === item.id);
+    const saved = { ...item, id: item.id || 'cpa_' + Date.now() };
+    const idx = list.findIndex(c => c.id === saved.id);
     if (idx !== -1) {
-      list[idx] = item;
+      list[idx] = saved;
     } else {
-      list.push({ ...item, id: item.id || 'cpa_' + Date.now() });
+      list.push(saved);
     }
     this.setItem(STORAGE_KEYS.CPA_NETWORKS, list);
   }
@@ -1815,11 +2116,12 @@ class DatabaseService {
 
   public saveProxySite(item: ProxySite): void {
     const list = this.getProxySites();
-    const idx = list.findIndex(p => p.id === item.id);
+    const saved = { ...item, id: item.id || 'prx_' + Date.now() };
+    const idx = list.findIndex(p => p.id === saved.id);
     if (idx !== -1) {
-      list[idx] = item;
+      list[idx] = saved;
     } else {
-      list.push({ ...item, id: item.id || 'prx_' + Date.now() });
+      list.push(saved);
     }
     this.setItem(STORAGE_KEYS.PROXY_SITES, list);
   }
@@ -1834,11 +2136,12 @@ class DatabaseService {
 
   public saveAntidetectBrowser(item: AntidetectBrowser): void {
     const list = this.getAntidetectBrowsers();
-    const idx = list.findIndex(b => b.id === item.id);
+    const saved = { ...item, id: item.id || 'adb_' + Date.now() };
+    const idx = list.findIndex(b => b.id === saved.id);
     if (idx !== -1) {
-      list[idx] = item;
+      list[idx] = saved;
     } else {
-      list.push({ ...item, id: item.id || 'adb_' + Date.now() });
+      list.push(saved);
     }
     this.setItem(STORAGE_KEYS.ANTIDETECT_BROWSERS, list);
   }
@@ -1881,6 +2184,7 @@ class DatabaseService {
 
   public clearUsageHistory(userId: string): void {
     const history = this.getItem<UsageHistoryEntry[]>(STORAGE_KEYS.USAGE_HISTORY, []);
+    const removedIds = history.filter(h => h.userId === userId).map(h => h.id);
     const filtered = history.filter(h => h.userId !== userId);
     this.setItem(STORAGE_KEYS.USAGE_HISTORY, filtered);
   }
@@ -1952,14 +2256,16 @@ class DatabaseService {
     const tickets = this.getSupportTickets();
     const idx = tickets.findIndex(t => t.id === ticketId);
     if (idx !== -1) {
-      tickets[idx].messages.push({
+      const msg = {
         id: 'msg_' + Date.now(),
         sender,
         senderName,
         text: text.trim(),
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }),
-      });
-      tickets[idx].status = sender === 'admin' ? 'replied' : 'open';
+      };
+      tickets[idx].messages.push(msg);
+      const nextStatus: 'open' | 'replied' | 'closed' = sender === 'admin' ? 'replied' : 'open';
+      tickets[idx].status = nextStatus;
       tickets[idx].updatedAt = new Date().toISOString();
       this.setItem(STORAGE_KEYS.SUPPORT_TICKETS, tickets);
     }
@@ -1993,7 +2299,8 @@ class DatabaseService {
 
   public updatePaymentGateways(settings: Partial<PaymentGatewaySettings>): void {
     const current = this.getPaymentGateways();
-    this.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, { ...current, ...settings });
+    const updated = { ...current, ...settings };
+    this.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, updated);
   }
 
   public getPaymentPackages(): PaymentPackage[] {
@@ -2039,6 +2346,9 @@ class DatabaseService {
       return { success: false, error: 'This Transaction ID has already been submitted and is pending or approved.' };
     }
 
+    const matchedPkg = DEFAULT_PAYMENT_PACKAGES.find(p => p.id === data.packageId);
+    const packageCredits = matchedPkg?.credits ?? 500;
+
     const newReq: PaymentRequest = {
       id: 'pay_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       userId: user.id,
@@ -2046,6 +2356,7 @@ class DatabaseService {
       userEmail: user.gmail,
       packageId: data.packageId,
       packageName: data.packageName,
+      packageCredits,
       method: data.method,
       currency: data.currency,
       amount: Number(data.amount),
@@ -2059,7 +2370,6 @@ class DatabaseService {
     requests.unshift(newReq);
     this.setItem(STORAGE_KEYS.PAYMENT_REQUESTS, requests);
 
-    // Update user planStatus to pending if not currently active
     const users = this.getUsers();
     const uIdx = users.findIndex(u => u.id === user.id);
     if (uIdx !== -1 && users[uIdx].planStatus !== 'active') {
@@ -2085,18 +2395,28 @@ class DatabaseService {
     if (idx === -1) return { success: false, error: 'Payment request not found.' };
 
     const req = requests[idx];
+    if (req.status === 'approved') {
+      return { success: false, error: 'This payment request has already been approved.' };
+    }
+
+    const matchedPkg = DEFAULT_PAYMENT_PACKAGES.find(p => p.id === req.packageId || p.name === req.packageName);
+    const grantedCredits = req.packageCredits ?? matchedPkg?.credits ?? 500;
+
     req.status = 'approved';
-    req.adminNote = adminNote?.trim() || 'Payment verified and approved.';
+    req.packageCredits = grantedCredits;
+    req.adminNote = adminNote?.trim() || `Approved (+${grantedCredits.toLocaleString()} Credits added).`;
     req.reviewedBy = adminEmail;
     req.reviewedAt = new Date().toISOString();
     this.setItem(STORAGE_KEYS.PAYMENT_REQUESTS, requests);
 
-    // Activate plan on the user record
     const users = this.getUsers();
     const uIdx = users.findIndex(u => u.id === req.userId);
+    let nextCredits = grantedCredits;
     if (uIdx !== -1) {
+      nextCredits = Math.max(0, Math.floor(Number(users[uIdx].credits ?? 0))) + grantedCredits;
       users[uIdx].plan = req.packageName;
       users[uIdx].planStatus = 'active';
+      users[uIdx].credits = nextCredits;
       users[uIdx].planUpdatedAt = new Date().toISOString();
       users[uIdx].updatedAt = new Date().toISOString();
       this.setItem(STORAGE_KEYS.USERS, users);
@@ -2106,6 +2426,7 @@ class DatabaseService {
         this.setCurrentUser(users[uIdx]);
       }
     }
+
 
     return { success: true };
   }
@@ -2126,12 +2447,13 @@ class DatabaseService {
     req.reviewedAt = new Date().toISOString();
     this.setItem(STORAGE_KEYS.PAYMENT_REQUESTS, requests);
 
-    // Update user planStatus if they don't have an active plan
     const users = this.getUsers();
     const uIdx = users.findIndex(u => u.id === req.userId);
+    let nextPlanStatus: 'none' | 'pending' | 'active' = 'none';
     if (uIdx !== -1 && users[uIdx].planStatus !== 'active') {
       const hasOtherPending = requests.some(r => r.userId === req.userId && r.status === 'pending');
-      users[uIdx].planStatus = hasOtherPending ? 'pending' : 'none';
+      nextPlanStatus = hasOtherPending ? 'pending' : 'none';
+      users[uIdx].planStatus = nextPlanStatus;
       users[uIdx].updatedAt = new Date().toISOString();
       this.setItem(STORAGE_KEYS.USERS, users);
 
@@ -2140,6 +2462,7 @@ class DatabaseService {
         this.setCurrentUser(users[uIdx]);
       }
     }
+
 
     return { success: true };
   }

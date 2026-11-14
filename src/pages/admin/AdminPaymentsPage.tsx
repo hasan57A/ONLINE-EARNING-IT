@@ -16,6 +16,7 @@ import {
   Save,
   DollarSign,
   Filter,
+  Coins,
 } from 'lucide-react';
 
 export const AdminPaymentsPage: React.FC = () => {
@@ -81,7 +82,7 @@ export const AdminPaymentsPage: React.FC = () => {
       return;
     }
     refreshUser();
-    showToast('Payment approved and user plan activated!', 'success');
+    showToast('Payment approved, package activated, and credits added to user balance!', 'success');
   };
 
   const handleDecline = (reqId: string) => {
@@ -256,6 +257,9 @@ export const AdminPaymentsPage: React.FC = () => {
                     ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
                     : 'bg-amber-500/15 text-amber-400 border-amber-500/30';
 
+                const matchedPkg = db.getPaymentPackages().find(p => p.id === req.packageId || p.name === req.packageName);
+                const reqCredits = req.packageCredits ?? matchedPkg?.credits ?? 500;
+
                 return (
                   <div
                     key={req.id}
@@ -271,6 +275,10 @@ export const AdminPaymentsPage: React.FC = () => {
                             {req.status}
                           </span>
                           <span className="text-xs font-bold text-white">{req.packageName}</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[11px] font-mono font-bold">
+                            <Coins className="w-3 h-3" />
+                            <span>+{reqCredits.toLocaleString()} Credits</span>
+                          </span>
                           <span className="text-sm font-black font-mono tabular-nums text-emerald-400">
                             {req.currency === 'USDT' ? `$${req.amount} USDT` : `৳${req.amount.toLocaleString()} BDT`}
                           </span>

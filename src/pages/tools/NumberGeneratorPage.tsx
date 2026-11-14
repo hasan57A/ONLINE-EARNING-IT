@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/ui/Toast';
-import { db } from '../../services/db';
+import { db, TOOL_CREDIT_COSTS } from '../../services/db';
 import {
   PhoneCall,
   Copy,
@@ -26,9 +26,10 @@ import { RealisticToolIcon } from '../../components/ui/RealisticIcon';
 import { motion, AnimatePresence } from 'motion/react';
 import { ALL_COUNTRIES_WITH_GLOBAL, findCountryGeo } from '../../data/countries';
 import { useDbSync } from '../../hooks/useDbSync';
+import { PackageCreditGuard } from '../../components/ui/PackageCreditGuard';
 
 export const NumberGeneratorPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { showToast } = useToast();
   useDbSync();
 
@@ -46,6 +47,10 @@ export const NumberGeneratorPage: React.FC = () => {
   const poolTotal = numbersPool.length;
   const poolConsumed = numbersPool.filter(n => n.used).length;
   const poolAvailable = poolTotal - poolConsumed;
+  const requestedQty = Math.min(100, Math.max(1, Number(quantity) || 1));
+  const effectiveItemsCount = poolAvailable > 0 ? Math.min(poolAvailable, requestedQty) : requestedQty;
+  const effectiveCreditsNeeded = effectiveItemsCount * TOOL_CREDIT_COSTS.NUMBER;
+  const creditAccess = db.canUseTool(user?.id, effectiveCreditsNeeded);
 
   const filteredCountries = ALL_COUNTRIES_WITH_GLOBAL.filter(c => {
     const q = countrySearch.trim().toLowerCase();
@@ -73,6 +78,13 @@ export const NumberGeneratorPage: React.FC = () => {
     }
 
     const qty = Math.min(poolAvailable, Math.min(100, Math.max(1, Number(quantity) || 1)));
+    const creditsRequired = qty * TOOL_CREDIT_COSTS.NUMBER;
+    const access = db.canUseTool(user.id, creditsRequired);
+    if (!access.allowed) {
+      showToast(access.reason || 'Active package and credits are required to generate Numbers.', 'error');
+      return;
+    }
+
     setIsGenerating(true);
 
     try {
@@ -85,6 +97,7 @@ export const NumberGeneratorPage: React.FC = () => {
 
       setNumbers(results);
       setFromPool(fromPoolCount);
+      refreshUser();
 
       db.recordUsage(
         user.id,
@@ -95,7 +108,12 @@ export const NumberGeneratorPage: React.FC = () => {
         `${country} · ${results.length} numbers`
       );
 
-      showToast(`Generated & cut ${results.length} phone numbers from Admin Database Pool!`, 'success');
+      showToast(
+        `Generated & cut ${results.length} phone numbers from Admin Database Pool${
+          access.isAdmin ? '' : ` (${results.length * TOOL_CREDIT_COSTS.NUMBER} credits used)`
+        }!`,
+        'success'
+      );
     } catch {
       showToast('Failed to generate numbers.', 'error');
     } finally {
@@ -194,6 +212,13 @@ export const NumberGeneratorPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Package & Credit Enforcement Banner */}
+      <PackageCreditGuard
+        userId={user?.id}
+        requiredCredits={effectiveCreditsNeeded}
+        creditUnitLabel="2 Credits per Phone Number"
+      />
 
       {/* Pool Status Callout */}
       {poolAvailable === 0 ? (
@@ -357,11 +382,11 @@ export const NumberGeneratorPage: React.FC = () => {
 
             {/* Action Trigger */}
             <motion.button
-              whileTap={{ scale: poolAvailable > 0 ? 0.98 : 1 }}
+              whileTap={{ scale: poolAvailable > 0 && creditAccess.allowed ? 0.98 : 1 }}
               onClick={handleGenerate}
-              disabled={isGenerating || poolAvailable === 0}
+              disabled={isGenerating || poolAvailable === 0 || !creditAccess.allowed}
               className={`w-full py-3.5 rounded-2xl font-bold text-xs tracking-wider uppercase shadow-lg flex items-center justify-center gap-2 transition-all ${
-                poolAvailable === 0
+                poolAvailable === 0 || !creditAccess.allowed
                   ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
                   : 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 shadow-cyan-500/25 cursor-pointer'
               }`}
@@ -370,9 +395,15 @@ export const NumberGeneratorPage: React.FC = () => {
               <span>
                 {isGenerating
                   ? 'Retrieving Numbers...'
+                  : !creditAccess.allowed
+                  ? creditAccess.hasActivePackage && creditAccess.remainingCredits > 0
+                    ? `Need ${effectiveCreditsNeeded} Cr (${creditAccess.remainingCredits} left)`
+                    : 'Package & Credits Required'
                   : poolAvailable === 0
                   ? 'Admin Must Upload Numbers First'
-                  : `Generate & Cut ${Math.min(quantity, poolAvailable)} Numbers`}
+                  : `Generate & Cut ${effectiveItemsCount} Numbers${
+                      creditAccess.isAdmin ? '' : ` (${effectiveCreditsNeeded} Cr)`
+                    }`}
               </span>
             </motion.button>
           </div>

@@ -17,10 +17,12 @@ import {
 } from 'lucide-react';
 import { RealisticToolIcon } from '../../components/ui/RealisticIcon';
 import { motion, AnimatePresence } from 'motion/react';
+import { useDbSync } from '../../hooks/useDbSync';
 
 export const DuplicateTextRemoverPage: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
+  useDbSync();
 
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
@@ -39,6 +41,11 @@ export const DuplicateTextRemoverPage: React.FC = () => {
   } | null>(null);
 
   const handleProcess = () => {
+    if (!user) {
+      showToast('Please sign in to use Duplicate Text Remover.', 'error');
+      return;
+    }
+
     if (!inputText.trim()) {
       showToast('Please paste or write some lines to process.', 'error');
       return;
@@ -76,18 +83,19 @@ export const DuplicateTextRemoverPage: React.FC = () => {
       removedLines: removedCount,
     });
 
-    if (user) {
-      db.recordUsage(
-        user.id,
-        'duplicate-text-remover',
-        'Duplicate Text Remover',
-        uniqueResult.length,
-        'Success',
-        `Original: ${originalCount} · Unique: ${uniqueResult.length} · Removed: ${removedCount}`
-      );
-    }
+    db.recordUsage(
+      user.id,
+      'duplicate-text-remover',
+      'Duplicate Text Remover',
+      uniqueResult.length,
+      'Success',
+      `Original: ${originalCount} · Unique: ${uniqueResult.length} · Removed: ${removedCount} (Free)`
+    );
 
-    showToast(`Deduplicated text! Removed ${removedCount} redundant lines.`, 'success');
+    showToast(
+      `Deduplicated text! Removed ${removedCount} redundant lines (Free).`,
+      'success'
+    );
   };
 
   const loadSample = () => {
@@ -153,6 +161,9 @@ alex.cpa@example.com`;
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
                   50,000+ Lines Supported
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  100% Free Tool
                 </span>
               </div>
               <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-2.5">
@@ -332,10 +343,10 @@ alex.cpa@example.com`;
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-white/5">
           <button
             onClick={handleProcess}
-            className="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold text-xs shadow-lg shadow-amber-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full sm:w-auto px-8 py-3.5 rounded-2xl font-bold text-xs shadow-lg transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-amber-600/30 cursor-pointer"
           >
             <Filter className="w-4 h-4" />
-            <span>Remove Duplicates</span>
+            <span>Remove Duplicates (Free)</span>
           </button>
 
           <div className="flex items-center gap-2.5 w-full sm:w-auto">
