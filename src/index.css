@@ -1,0 +1,341 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbars for clean look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.5);
+}
+
+/* Cybernetic subtle grid for dark surfaces */
+.bg-subtle-grid {
+  background-image: radial-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.dark .bg-subtle-grid {
+  background-image: radial-gradient(rgba(59, 130, 246, 0.12) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+html.theme-obsidian .bg-subtle-grid {
+  background-image: radial-gradient(rgba(16, 185, 129, 0.14) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Futuristic isometric dot matrix */
+.bg-dot-matrix {
+  background-image: radial-gradient(rgba(99, 102, 241, 0.15) 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+
+html.theme-obsidian .bg-dot-matrix {
+  background-image: radial-gradient(rgba(20, 184, 166, 0.16) 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+
+/* Luxury Glassmorphic Surfaces */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-panel-hover:hover {
+  background: rgba(30, 41, 59, 0.75);
+  border-color: rgba(96, 165, 250, 0.35);
+  box-shadow: 0 12px 40px -10px rgba(37, 99, 235, 0.25);
+}
+
+/* Mode 2: Obsidian Emerald Studio Theme */
+html.theme-obsidian {
+  color-scheme: dark;
+  --color-slate-950: #050a09;
+  --color-slate-900: #0b1512;
+  --color-slate-800: #162923;
+  --color-slate-700: #213d34;
+  --color-blue-950: #04241b;
+  --color-blue-900: #083b2c;
+  --color-blue-700: #047857;
+  --color-blue-600: #059669;
+  --color-blue-500: #10b981;
+  --color-blue-400: #34d399;
+  --color-blue-300: #6ee7b7;
+  --color-blue-200: #a7f3d0;
+  --color-indigo-950: #062827;
+  --color-indigo-600: #0d9488;
+  --color-indigo-500: #14b8a6;
+  --color-indigo-400: #2dd4bf;
+}
+
+html.theme-obsidian .glass-panel {
+  background: rgba(11, 21, 18, 0.72);
+  border-color: rgba(52, 211, 153, 0.14);
+}
+
+html.theme-obsidian .glass-panel-hover:hover {
+  background: rgba(16, 33, 28, 0.85);
+  border-color: rgba(52, 211, 153, 0.4);
+  box-shadow: 0 12px 40px -10px rgba(16, 185, 129, 0.25);
+}
+
+/* Mode 3: Royal Amethyst Studio Theme */
+html.theme-royal {
+  color-scheme: dark;
+  --color-slate-950: #080510;
+  --color-slate-900: #110b21;
+  --color-slate-800: #21163d;
+  --color-slate-700: #322259;
+  --color-blue-950: #1c0c3b;
+  --color-blue-900: #2e1065;
+  --color-blue-700: #6d28d9;
+  --color-blue-600: #7c3aed;
+  --color-blue-500: #8b5cf6;
+  --color-blue-400: #a78bfa;
+  --color-blue-300: #c4b5fd;
+  --color-blue-200: #ddd6fe;
+  --color-indigo-950: #280a3d;
+  --color-indigo-600: #9333ea;
+  --color-indigo-500: #a855f7;
+  --color-indigo-400: #c084fc;
+}
+
+html.theme-royal .bg-subtle-grid {
+  background-image: radial-gradient(rgba(168, 85, 247, 0.14) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+html.theme-royal .bg-dot-matrix {
+  background-image: radial-gradient(rgba(139, 92, 246, 0.16) 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+
+html.theme-royal .glass-panel {
+  background: rgba(17, 11, 33, 0.72);
+  border-color: rgba(167, 139, 250, 0.16);
+}
+
+html.theme-royal .glass-panel-hover:hover {
+  background: rgba(27, 17, 51, 0.85);
+  border-color: rgba(167, 139, 250, 0.42);
+  box-shadow: 0 12px 40px -10px rgba(139, 92, 246, 0.28);
+}
+
+/* Mode 4: Sovereign Gold Onyx Theme */
+html.theme-gold {
+  color-scheme: dark;
+  --color-slate-950: #090806;
+  --color-slate-900: #14110c;
+  --color-slate-800: #262015;
+  --color-slate-700: #3a301f;
+  --color-blue-950: #241904;
+  --color-blue-900: #3d2a08;
+  --color-blue-700: #b45309;
+  --color-blue-600: #d97706;
+  --color-blue-500: #f59e0b;
+  --color-blue-400: #fbbf24;
+  --color-blue-300: #fcd34d;
+  --color-blue-200: #fde68a;
+  --color-indigo-950: #291605;
+  --color-indigo-600: #ca8a04;
+  --color-indigo-500: #eab308;
+  --color-indigo-400: #facc15;
+}
+
+html.theme-gold .bg-subtle-grid {
+  background-image: radial-gradient(rgba(245, 158, 11, 0.13) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+html.theme-gold .bg-dot-matrix {
+  background-image: radial-gradient(rgba(251, 191, 36, 0.15) 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+
+html.theme-gold .glass-panel {
+  background: rgba(20, 17, 12, 0.74);
+  border-color: rgba(251, 191, 36, 0.15);
+}
+
+html.theme-gold .glass-panel-hover:hover {
+  background: rgba(31, 26, 17, 0.86);
+  border-color: rgba(251, 191, 36, 0.42);
+  box-shadow: 0 12px 40px -10px rgba(245, 158, 11, 0.24);
+}
+
+/* Mode 5: Crimson Stealth Theme */
+html.theme-crimson {
+  color-scheme: dark;
+  --color-slate-950: #0b0608;
+  --color-slate-900: #160c10;
+  --color-slate-800: #2b161e;
+  --color-slate-700: #42212d;
+  --color-blue-950: #2b0712;
+  --color-blue-900: #470c1e;
+  --color-blue-700: #be123c;
+  --color-blue-600: #e11d48;
+  --color-blue-500: #f43f5e;
+  --color-blue-400: #fb7185;
+  --color-blue-300: #fda4af;
+  --color-blue-200: #fecdd3;
+  --color-indigo-950: #2e0717;
+  --color-indigo-600: #db2777;
+  --color-indigo-500: #ec4899;
+  --color-indigo-400: #f472b6;
+}
+
+html.theme-crimson .bg-subtle-grid {
+  background-image: radial-gradient(rgba(244, 63, 94, 0.13) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+html.theme-crimson .bg-dot-matrix {
+  background-image: radial-gradient(rgba(251, 113, 133, 0.15) 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+
+html.theme-crimson .glass-panel {
+  background: rgba(22, 12, 16, 0.74);
+  border-color: rgba(251, 113, 133, 0.15);
+}
+
+html.theme-crimson .glass-panel-hover:hover {
+  background: rgba(34, 17, 24, 0.86);
+  border-color: rgba(251, 113, 133, 0.42);
+  box-shadow: 0 12px 40px -10px rgba(244, 63, 94, 0.25);
+}
+
+/* Mode 6: Abyssal Cyan Oceanic Theme */
+html.theme-oceanic {
+  color-scheme: dark;
+  --color-slate-950: #040b10;
+  --color-slate-900: #091721;
+  --color-slate-800: #112a3b;
+  --color-slate-700: #1b4059;
+  --color-blue-950: #04222c;
+  --color-blue-900: #08394a;
+  --color-blue-700: #0e7490;
+  --color-blue-600: #0891b2;
+  --color-blue-500: #06b6d4;
+  --color-blue-400: #22d3ee;
+  --color-blue-300: #67e8f9;
+  --color-blue-200: #a5f3fc;
+  --color-indigo-950: #05262e;
+  --color-indigo-600: #0284c7;
+  --color-indigo-500: #0ea5e9;
+  --color-indigo-400: #38bdf8;
+}
+
+html.theme-oceanic .bg-subtle-grid {
+  background-image: radial-gradient(rgba(6, 182, 212, 0.14) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+html.theme-oceanic .bg-dot-matrix {
+  background-image: radial-gradient(rgba(34, 211, 238, 0.16) 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+
+html.theme-oceanic .glass-panel {
+  background: rgba(9, 23, 33, 0.72);
+  border-color: rgba(34, 211, 238, 0.15);
+}
+
+html.theme-oceanic .glass-panel-hover:hover {
+  background: rgba(14, 34, 48, 0.85);
+  border-color: rgba(34, 211, 238, 0.42);
+  box-shadow: 0 12px 40px -10px rgba(6, 182, 212, 0.25);
+}
+
+/* Aurora Ambient Glow Keyframes */
+@keyframes aurora-pulse {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translate(25px, -20px) scale(1.12);
+    opacity: 0.75;
+  }
+}
+
+@keyframes float-gentle {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes radar-sweep {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes gradient-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-aurora {
+  animation: aurora-pulse 10s ease-in-out infinite alternate;
+}
+
+.animate-float {
+  animation: float-gentle 5s ease-in-out infinite;
+}
+
+.animate-gradient-flow {
+  background-size: 200% 200%;
+  animation: gradient-flow 6s ease infinite;
+}
+
+/* Shimmer animation for card headers */
+@keyframes subtle-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-shimmer {
+  animation: subtle-shimmer 3s infinite;
+}
+
