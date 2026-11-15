@@ -8,16 +8,11 @@ import {
   Search,
   ArrowRight,
   Sparkles,
+  Coins,
   CreditCard,
-  Lock,
-  Gift,
-  Crown,
 } from 'lucide-react';
 import { RealisticToolIcon } from '../../components/ui/RealisticIcon';
-import { AnimatePresence } from 'motion/react';
-import { TiltCard } from '../../components/motion/kit';
-
-const FREE_TOOL_SLUGS = ['text-shuffler', 'duplicate-text-remover'];
+import { motion, AnimatePresence } from 'motion/react';
 
 export const ToolsListPage: React.FC = () => {
   useDbSync();
@@ -25,21 +20,18 @@ export const ToolsListPage: React.FC = () => {
   const { user } = useAuth();
   const tools = db.getTools();
   const access = db.canUseTool(user?.id);
-  const isUnlocked = access.isAdmin || access.hasUsablePackage;
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
   const categories = ['All', 'Browser & Device', 'Marketing & Outreach', 'Content Processing', 'Data Cleaning', 'Telephony & Testing', 'Email & QA'];
 
-  const filteredTools = tools
-    .filter(tool => {
-      const matchSearch =
-        tool.name.toLowerCase().includes(search.toLowerCase()) ||
-        tool.description.toLowerCase().includes(search.toLowerCase());
-      const matchCategory = selectedCategory === 'All' || tool.category === selectedCategory;
-      return matchSearch && matchCategory;
-    })
-    .sort((a, b) => Number(FREE_TOOL_SLUGS.includes(b.slug)) - Number(FREE_TOOL_SLUGS.includes(a.slug)));
+  const filteredTools = tools.filter(tool => {
+    const matchSearch =
+      tool.name.toLowerCase().includes(search.toLowerCase()) ||
+      tool.description.toLowerCase().includes(search.toLowerCase());
+    const matchCategory = selectedCategory === 'All' || tool.category === selectedCategory;
+    return matchSearch && matchCategory;
+  });
 
   const getToolCreditInfo = (slug: string): { label: string; isFree: boolean } => {
     switch (slug) {
@@ -60,96 +52,75 @@ export const ToolsListPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="oe-panel rounded-3xl p-6 sm:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-        <div className="space-y-2.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-bold text-violet-300 uppercase tracking-wider px-2.5 py-1 rounded-full bg-violet-500/15 border border-violet-400/30">
-              High-Precision Suite
-            </span>
-            <span className="text-[10px] font-bold text-emerald-300 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 inline-flex items-center gap-1">
-              <Gift className="w-3 h-3" /> 2 TOOLS FREE FOREVER
-            </span>
-          </div>
-          <h1 className="text-2xl sm:text-4xl font-extrabold text-slate-100 tracking-tight flex items-center gap-3">
-            <span>Performance Marketing Tools</span>
-            <Sparkles className="w-5 h-5 text-fuchsia-400" />
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-            Text Shuffler & Duplicate Remover are 100% free. Generator tools pull from synchronized Admin Pools: UA (1 Cr), Number (2 Cr), Mail (3 Cr), Lead (5 Cr).
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => navigate('/payment')}
-          className="btn-premium-vivid px-5 py-3 rounded-2xl text-xs inline-flex items-center gap-2 cursor-pointer shrink-0 self-start lg:self-auto"
-        >
-          <CreditCard className="w-4 h-4" />
-          <span className="font-mono">
-            {access.isAdmin
-              ? 'Admin Unlimited Mode'
-              : `${access.remainingCredits.toLocaleString()} Credits · Top Up`}
-          </span>
-        </button>
-      </div>
-
-      {isUnlocked ? (
-        <PackageCreditGuard
-          userId={user?.id}
-          requiredCredits={1}
-          creditUnitLabel="UA: 1 Cr · Number: 2 Cr · Mail: 3 Cr · Lead: 5 Cr · Text Tools: Free"
-        />
-      ) : (
-        <div className="oe-panel rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3.5">
-            <div className="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-300 shrink-0">
-              <Gift className="w-5 h-5" />
+    <div className="space-y-8">
+      {/* Header Banner */}
+      <div className="relative overflow-hidden p-6 sm:p-8 rounded-3xl border border-blue-500/30 bg-gradient-to-r from-slate-950 via-blue-950/50 to-slate-950 shadow-2xl">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-blue-400 uppercase tracking-widest px-3 py-1 rounded-full bg-blue-500/15 border border-blue-500/30">
+                High-Precision Suite
+              </span>
+              <span className="text-xs font-mono text-amber-400 font-bold inline-flex items-center gap-1">
+                <Coins className="w-3.5 h-3.5" />
+                <span>Package & Credit System</span>
+              </span>
             </div>
-            <div>
-              <h4 className="font-bold text-slate-100 text-sm">
-                {access.planStatus === 'pending'
-                  ? 'Payment pending approval — free tools are open now'
-                  : 'Free tools are unlocked — use them anytime'}
-              </h4>
-              <p className="text-slate-400 text-xs mt-0.5">
-                Upgrade with any credit package to unlock the UA, Number, Mail & Lead pools.
-              </p>
-            </div>
+            <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-2.5">
+              Performance Marketing Tools
+              <Sparkles className="w-5 h-5 text-amber-300" />
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+              Text Shuffler and Duplicate Text Remover are 100% Free. Generator tools use package credits: User Agent (1 Cr), Number (2 Cr), Mail (3 Cr), and Lead (5 Cr).
+            </p>
           </div>
+
           <button
-            type="button"
             onClick={() => navigate('/payment')}
-            className="btn-premium-primary px-5 py-2.5 rounded-xl text-xs flex items-center gap-2 cursor-pointer shrink-0"
+            className="shrink-0 px-4 py-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold inline-flex items-center gap-2 transition-colors cursor-pointer self-start lg:self-auto"
           >
-            <Crown className="w-4 h-4" />
-            <span>{access.planStatus === 'pending' ? 'View Status' : 'Unlock All Tools'}</span>
+            <CreditCard className="w-4 h-4" />
+            <span className="font-mono">
+              {access.isAdmin
+                ? 'Admin Unlimited Mode'
+                : `${access.remainingCredits.toLocaleString()} Credits · Buy / Top Up`}
+            </span>
           </button>
         </div>
-      )}
+      </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 justify-between items-stretch sm:items-center">
+      {/* Package & Credit Access Guard */}
+      <PackageCreditGuard
+        userId={user?.id}
+        requiredCredits={1}
+        creditUnitLabel="UA: 1 Cr · Number: 2 Cr · Mail: 3 Cr · Lead: 5 Cr · Text Tools: Free"
+      />
+
+      {/* Search & Category Filter Controls */}
+      <div className="flex flex-col sm:flex-row gap-4 justify-between items-stretch sm:items-center">
+        {/* Search Input */}
         <div className="relative max-w-md w-full">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search tools by title or keyword..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-2xl border text-xs text-slate-100"
+            placeholder="Search tools by title, function, or keyword..."
+            className="w-full pl-10 pr-4 py-2.5 rounded-2xl border border-white/10 bg-slate-900/80 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500 transition-colors shadow-inner font-medium"
           />
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 text-xs p-1.5 rounded-2xl oe-panel">
-          {categories.map(cat => (
+        {/* Category Segmented Selector */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 text-xs p-1 rounded-2xl bg-slate-900/60 border border-white/5">
+          {categories.slice(0, 4).map(cat => (
             <button
               key={cat}
-              type="button"
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3.5 py-2 rounded-xl font-bold whitespace-nowrap transition-all cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all cursor-pointer ${
                 selectedCategory === cat
-                  ? 'btn-premium-primary text-white'
-                  : 'text-slate-400 hover:text-slate-100'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               {cat}
@@ -158,85 +129,89 @@ export const ToolsListPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        <AnimatePresence>
-          {filteredTools.map((tool, index) => {
-            const creditInfo = getToolCreditInfo(tool.slug);
-            const needsPackage = !creditInfo.isFree && !isUnlocked;
-            return (
-              <TiltCard
-                key={tool.id}
-                layout
-                initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.96 }}
-                transition={{ duration: 0.35, delay: index * 0.04 }}
-                whileHover={{ y: -5 }}
-                className="relative oe-panel oe-panel-hover p-6 rounded-3xl flex flex-col justify-between space-y-5 group"
-              >
-                {creditInfo.isFree && (
-                  <span className="absolute -top-2.5 left-6 px-3 py-0.5 rounded-full bg-emerald-500 text-white font-extrabold text-[10px] inline-flex items-center gap-1 shadow-lg">
-                    <Gift className="w-3 h-3" /> FREE
-                  </span>
-                )}
-                <div className="space-y-3.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <RealisticToolIcon slug={tool.slug} size="lg" />
-                    <div className="flex flex-col items-end gap-1.5">
-                      <span
-                        className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border ${
-                          tool.enabled
-                            ? 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30'
-                            : 'text-amber-300 bg-amber-500/15 border-amber-500/30'
-                        }`}
-                      >
-                        {tool.enabled ? 'Ready' : 'Maintenance'}
+      {/* Tools Grid with Motion Stagger */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <AnimatePresence mode="popLayout">
+          {filteredTools.map((tool, index) => (
+            <motion.div
+              key={tool.id}
+              layout
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3, delay: index * 0.05 }}
+              whileHover={{ y: -6 }}
+              className={`p-7 rounded-3xl border flex flex-col justify-between space-y-5 transition-all shadow-xl group ${
+                tool.enabled
+                  ? 'border-white/10 bg-slate-900/80 hover:border-blue-500/50 hover:bg-slate-900'
+                  : 'border-white/5 bg-slate-900/40 opacity-70'
+              }`}
+            >
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-2">
+                  <RealisticToolIcon slug={tool.slug} size="lg" />
+                  <div className="flex flex-col items-end gap-1.5">
+                    {tool.enabled ? (
+                      <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>Ready</span>
                       </span>
-                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border text-violet-200 bg-violet-500/15 border-violet-500/30">
-                        {creditInfo.label}
+                    ) : (
+                      <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full">
+                        Maintenance
                       </span>
-                    </div>
+                    )}
+                    {(() => {
+                      const creditInfo = getToolCreditInfo(tool.slug);
+                      return (
+                        <span
+                          className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border ${
+                            creditInfo.isFree
+                              ? 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30'
+                              : 'text-amber-300 bg-amber-500/10 border-amber-500/20'
+                          }`}
+                        >
+                          {creditInfo.label}
+                        </span>
+                      );
+                    })()}
                   </div>
-
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-100 group-hover:text-violet-300 transition-colors">
-                      {tool.name}
-                    </h3>
-                    <p className="text-[10px] font-mono font-bold text-cyan-300 uppercase tracking-wider mt-0.5">
-                      {tool.category}
-                    </p>
-                  </div>
-
-                  <p className="text-xs text-slate-300 leading-relaxed">{tool.description}</p>
                 </div>
 
+                <div>
+                  <h3 className="text-lg font-bold text-white group-hover:text-blue-300 transition-colors">
+                    {tool.name}
+                  </h3>
+                  <p className="text-[11px] font-mono font-bold text-blue-400 uppercase tracking-wider mt-0.5">
+                    {tool.category}
+                  </p>
+                </div>
+
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  {tool.description}
+                </p>
+              </div>
+
+              <div className="pt-2">
                 <button
-                  type="button"
                   disabled={!tool.enabled}
-                  onClick={() => navigate(needsPackage ? '/payment' : `/tools/${tool.slug}`)}
-                  className={`w-full py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 ${
-                    !tool.enabled
-                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                      : needsPackage
-                      ? 'btn-premium-glass text-amber-300 cursor-pointer'
-                      : 'btn-premium-vivid cursor-pointer'
+                  onClick={() => navigate(`/tools/${tool.slug}`)}
+                  className={`w-full py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    tool.enabled
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white cursor-pointer shadow-lg shadow-blue-600/20 group-hover:shadow-blue-600/40'
+                      : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                   }`}
                 >
-                  {needsPackage && <Lock className="w-3.5 h-3.5" />}
-                  <span>
-                    {!tool.enabled
-                      ? 'Currently Disabled'
-                      : needsPackage
-                      ? 'Unlock with Package'
-                      : 'Open Tool Console'}
-                  </span>
-                  {tool.enabled && !needsPackage && <ArrowRight className="w-3.5 h-3.5" />}
+                  <span>{tool.enabled ? 'Open Tool Console' : 'Currently Disabled'}</span>
+                  {tool.enabled && <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />}
                 </button>
-              </TiltCard>
-            );
-          })}
+              </div>
+            </motion.div>
+          ))}
         </AnimatePresence>
       </div>
     </div>
   );
 };
+
+

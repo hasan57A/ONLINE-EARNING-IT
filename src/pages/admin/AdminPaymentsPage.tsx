@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/ui/Toast';
 import { useDbSync } from '../../hooks/useDbSync';
 import { db } from '../../services/db';
-import { playUiSound } from '../../services/sound';
-import { PaymentMethod, PaymentRequest, PaymentStatus } from '../../types';
+import { PaymentMethod, PaymentStatus } from '../../types';
 import {
   CreditCard,
   CheckCircle2,
@@ -18,28 +17,27 @@ import {
   DollarSign,
   Filter,
   Coins,
-  Receipt,
 } from 'lucide-react';
 
 export const AdminPaymentsPage: React.FC = () => {
-  const dbTick = useDbSync();
+  useDbSync();
   const { user, refreshUser } = useAuth();
   const { showToast } = useToast();
 
   const requests = db.getPaymentRequests();
+  const initialGateways = db.getPaymentGateways();
 
   const [activeTab, setActiveTab] = useState<'queue' | 'gateways'>('queue');
   const [statusFilter, setStatusFilter] = useState<'all' | PaymentStatus>('all');
   const [methodFilter, setMethodFilter] = useState<'All' | PaymentMethod>('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedReqId, setSelectedReqId] = useState<string>(requests[0]?.id || '');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [reviewNote, setReviewNote] = useState('');
-  const [gateways, setGateways] = useState(() => db.getPaymentGateways());
 
-  useEffect(() => {
-    setGateways(db.getPaymentGateways());
-  }, [dbTick]);
+  // Per-request action state (note / decline reason input)
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+
+  // Gateway settings state
+  const [gateways, setGateways] = useState(initialGateways);
 
   const pendingCount = requests.filter(r => r.status === 'pending').length;
   const approvedList = requests.filter(r => r.status === 'approved');
@@ -68,92 +66,75 @@ export const AdminPaymentsPage: React.FC = () => {
     return true;
   });
 
-  const selectedReq: PaymentRequest | null =
-    requests.find(r => r.id === selectedReqId) || filteredRequests[0] || requests[0] || null;
-
-  useEffect(() => {
-    if (selectedReq) {
-      setReviewNote(selectedReq.adminNote || '');
-    }
-  }, [selectedReq?.id, selectedReq?.status, selectedReq?.adminNote, selectedReq?.reviewedAt]);
-
   const handleCopy = (id: string, value: string) => {
     navigator.clipboard.writeText(value);
     setCopiedId(id);
-    playUiSound('copy');
     showToast('Copied TrxID to clipboard.', 'success');
     setTimeout(() => setCopiedId(null), 1500);
   };
 
   const handleApprove = (reqId: string) => {
     const adminEmail = user?.gmail || 'admin@onlineearningit.com';
-    const res = db.approvePaymentRequest(reqId, adminEmail, reviewNote);
+    const customNote = reviewNotes[reqId];
+    const res = db.approvePaymentRequest(reqId, adminEmail, customNote);
     if (!res.success) {
       showToast(res.error || 'Failed to approve payment.', 'error');
       return;
     }
     refreshUser();
-    playUiSound('notification');
-    showToast('Payment approved, package activated, and credits added!', 'success');
+    showToast('Payment approved, package activated, and credits added to user balance!', 'success');
   };
 
   const handleDecline = (reqId: string) => {
     const adminEmail = user?.gmail || 'admin@onlineearningit.com';
-    const res = db.declinePaymentRequest(reqId, adminEmail, reviewNote);
+    const customReason = reviewNotes[reqId];
+    const res = db.declinePaymentRequest(reqId, adminEmail, customReason);
     if (!res.success) {
       showToast(res.error || 'Failed to decline payment.', 'error');
       return;
     }
     refreshUser();
-    playUiSound('click');
     showToast('Payment request declined.', 'info');
   };
 
   const handleSaveGateways = (e: React.FormEvent) => {
     e.preventDefault();
     db.updatePaymentGateways(gateways);
-    playUiSound('click');
-    showToast('Payment gateway accounts updated!', 'success');
+    showToast('Payment gateway numbers and instructions updated!', 'success');
   };
 
-  const packages = db.getPaymentPackages();
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-widest">
+          <div className="flex items-center gap-2 text-xs font-semibold text-amber-500 uppercase tracking-widest">
             <CreditCard className="w-4 h-4" />
             <span>Payment Verification & Gateways</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-100 tracking-tight mt-1">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-1">
             Payment Approvals
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">
-            Verify user TrxIDs from bKash, Nagad, Rocket, and Binance — inspect details and approve credits.
+            Verify user TrxIDs from bKash, Nagad, Rocket, and Binance — approve to activate plans or decline invalid entries.
           </p>
         </div>
 
         {/* Mode Switcher */}
-        <div className="oe-panel flex items-center gap-1.5 p-1.5 rounded-xl self-start sm:self-auto">
+        <div className="flex items-center gap-2 p-1 rounded-xl bg-slate-900 border border-slate-800 self-start sm:self-auto">
           <button
             onClick={() => setActiveTab('queue')}
-            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'queue'
-                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow'
-                : 'text-slate-400 hover:text-slate-100'
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'queue' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
             }`}
           >
             <CreditCard className="w-3.5 h-3.5" />
-            <span>Requests ({pendingCount} Pending)</span>
+            <span>Approval Queue ({pendingCount})</span>
           </button>
           <button
             onClick={() => setActiveTab('gateways')}
-            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-              activeTab === 'gateways'
-                ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow'
-                : 'text-slate-400 hover:text-slate-100'
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'gateways' ? 'bg-amber-500 text-slate-950' : 'text-slate-400 hover:text-white'
             }`}
           >
             <Settings className="w-3.5 h-3.5" />
@@ -162,57 +143,48 @@ export const AdminPaymentsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 5 KPI Summary Cards (Image 4) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <div className="oe-panel oe-rgb-violet p-4 rounded-2xl space-y-1">
-          <div className="flex items-center justify-between text-[11px] text-slate-400 font-semibold">
-            <span>Total Requests</span>
-            <Receipt className="w-3.5 h-3.5 text-violet-400" />
+      {/* KPI Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/90 space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span>Total Submissions</span>
+            <CreditCard className="w-4 h-4 text-blue-400" />
           </div>
-          <p className="text-2xl font-black text-slate-100 font-mono tabular-nums">{requests.length}</p>
+          <p className="text-2xl font-extrabold text-white font-mono tabular-nums">{requests.length}</p>
         </div>
 
-        <div className="oe-panel oe-rgb-amber p-4 rounded-2xl space-y-1">
-          <div className="flex items-center justify-between text-[11px] text-amber-300 font-semibold">
+        <div className="p-5 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-amber-300">
             <span>Pending Review</span>
-            <Clock className="w-3.5 h-3.5 text-amber-400" />
+            <Clock className="w-4 h-4 text-amber-400" />
           </div>
-          <p className="text-2xl font-black text-amber-400 font-mono tabular-nums">{pendingCount}</p>
+          <p className="text-2xl font-extrabold text-amber-400 font-mono tabular-nums">{pendingCount}</p>
         </div>
 
-        <div className="oe-panel oe-rgb-emerald p-4 rounded-2xl space-y-1">
-          <div className="flex items-center justify-between text-[11px] text-emerald-300 font-semibold">
-            <span>Approved Orders</span>
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+        <div className="p-5 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-emerald-300">
+            <span>Approved Revenue</span>
+            <DollarSign className="w-4 h-4 text-emerald-400" />
           </div>
-          <p className="text-2xl font-black text-emerald-400 font-mono tabular-nums">{approvedList.length}</p>
-        </div>
-
-        <div className="oe-panel oe-rgb-cyan p-4 rounded-2xl space-y-1">
-          <div className="flex items-center justify-between text-[11px] text-cyan-300 font-semibold">
-            <span>BDT Volume</span>
-            <DollarSign className="w-3.5 h-3.5 text-cyan-400" />
-          </div>
-          <p className="text-2xl font-black text-cyan-400 font-mono tabular-nums">
-            ৳{totalApprovedBdt.toLocaleString()}
+          <p className="text-xl font-extrabold text-emerald-400 font-mono tabular-nums">
+            ৳{totalApprovedBdt.toLocaleString()} · ${totalApprovedUsdt}
           </p>
+          <p className="text-[10px] text-slate-400 font-mono">{approvedList.length} approved orders</p>
         </div>
 
-        <div className="oe-panel oe-rgb-rose p-4 rounded-2xl space-y-1">
-          <div className="flex items-center justify-between text-[11px] text-rose-300 font-semibold">
-            <span>USDT / Declined</span>
-            <XCircle className="w-3.5 h-3.5 text-rose-400" />
+        <div className="p-5 rounded-2xl border border-rose-500/30 bg-rose-500/5 space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-rose-300">
+            <span>Declined</span>
+            <XCircle className="w-4 h-4 text-rose-400" />
           </div>
-          <p className="text-lg font-black text-slate-100 font-mono tabular-nums">
-            ${totalApprovedUsdt} <span className="text-xs text-rose-400">({declinedCount} dec)</span>
-          </p>
+          <p className="text-2xl font-extrabold text-rose-400 font-mono tabular-nums">{declinedCount}</p>
         </div>
       </div>
 
       {activeTab === 'queue' ? (
         <div className="space-y-4">
           {/* Filters Bar */}
-          <div className="oe-panel p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="p-4 rounded-2xl border border-slate-800 bg-slate-900/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-1 text-xs text-slate-400 mr-1">
                 <Filter className="w-3.5 h-3.5" />
@@ -224,8 +196,8 @@ export const AdminPaymentsPage: React.FC = () => {
                   onClick={() => setStatusFilter(st)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize cursor-pointer transition-colors ${
                     statusFilter === st
-                      ? 'bg-violet-600 text-white'
-                      : 'bg-slate-950/70 text-slate-400 border border-slate-800 hover:text-slate-100'
+                      ? 'bg-amber-500 text-slate-950'
+                      : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-white'
                   }`}
                 >
                   {st}
@@ -235,7 +207,7 @@ export const AdminPaymentsPage: React.FC = () => {
               <select
                 value={methodFilter}
                 onChange={e => setMethodFilter(e.target.value as 'All' | PaymentMethod)}
-                className="px-3 py-1.5 rounded-lg border text-xs font-semibold text-slate-100"
+                className="px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-950 text-xs font-semibold text-white focus:outline-none focus:border-amber-500"
               >
                 <option value="All">All Methods</option>
                 <option value="bKash">bKash</option>
@@ -246,213 +218,160 @@ export const AdminPaymentsPage: React.FC = () => {
             </div>
 
             <div className="relative w-full md:w-72">
-              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-3" />
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search name, Gmail, TrxID, sender..."
-                className="w-full pl-9 pr-3 py-2 rounded-xl border text-xs text-slate-100"
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-800 bg-slate-950 text-xs text-white focus:outline-none focus:border-amber-500"
               />
             </div>
           </div>
 
-          {/* Split Table + Inspector */}
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-            {/* Left Table */}
-            <div className="xl:col-span-7 oe-panel rounded-2xl overflow-hidden">
-              {filteredRequests.length === 0 ? (
-                <div className="p-12 text-center space-y-2">
-                  <CreditCard className="w-8 h-8 mx-auto text-slate-600" />
-                  <p className="text-sm font-bold text-slate-300">No matching payment requests</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-950/80 border-b border-slate-800/80 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      <tr>
-                        <th className="py-3 px-4">User & Package</th>
-                        <th className="py-3 px-4">Method</th>
-                        <th className="py-3 px-4">Amount</th>
-                        <th className="py-3 px-4">TrxID</th>
-                        <th className="py-3 px-4">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                      {filteredRequests.map(req => {
-                        const isSelected = selectedReq?.id === req.id;
-                        return (
-                          <tr
-                            key={req.id}
-                            onClick={() => setSelectedReqId(req.id)}
-                            className={`cursor-pointer transition-colors ${
-                              isSelected ? 'bg-violet-600/15' : 'hover:bg-slate-800/30'
-                            }`}
-                          >
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              <div className="font-bold text-slate-100">{req.userName}</div>
-                              <div className="text-[11px] text-violet-300">{req.packageName}</div>
-                            </td>
-                            <td className="py-3 px-4 font-bold whitespace-nowrap">{req.method}</td>
-                            <td className="py-3 px-4 font-mono font-bold text-emerald-400 whitespace-nowrap tabular-nums">
-                              {req.currency === 'USDT' ? `$${req.amount}` : `৳${req.amount.toLocaleString()}`}
-                            </td>
-                            <td className="py-3 px-4 font-mono text-amber-300 whitespace-nowrap">
-                              {req.transactionId}
-                            </td>
-                            <td className="py-3 px-4 whitespace-nowrap">
-                              <span
-                                className={`px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase ${
-                                  req.status === 'approved'
-                                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                                    : req.status === 'declined'
-                                    ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                                    : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                                }`}
-                              >
-                                {req.status}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+          {/* Requests List */}
+          {filteredRequests.length === 0 ? (
+            <div className="p-12 rounded-2xl border border-slate-800 bg-slate-900/60 text-center space-y-2">
+              <CreditCard className="w-8 h-8 mx-auto text-slate-600" />
+              <p className="text-sm font-bold text-slate-300">No matching payment requests</p>
+              <p className="text-xs text-slate-500">
+                User payment submissions from bKash, Nagad, Rocket, and Binance will appear here for review.
+              </p>
             </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredRequests.map(req => {
+                const methodBadge =
+                  req.method === 'bKash'
+                    ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                    : req.method === 'Nagad'
+                    ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
+                    : req.method === 'Rocket'
+                    ? 'bg-purple-500/15 text-purple-400 border-purple-500/30'
+                    : 'bg-amber-400/15 text-amber-300 border-amber-400/30';
 
-            {/* Right: Transaction Details Inspector Panel */}
-            <div className="xl:col-span-5 oe-panel oe-rgb-amber rounded-2xl p-6 space-y-5">
-              {selectedReq ? (
-                <>
-                  <div className="flex items-start justify-between border-b border-slate-800/80 pb-4">
-                    <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
-                        Transaction Details Inspector
-                      </span>
-                      <h3 className="text-base font-extrabold text-slate-100 mt-0.5">
-                        {selectedReq.packageName} ·{' '}
-                        {selectedReq.currency === 'USDT'
-                          ? `$${selectedReq.amount} USDT`
-                          : `৳${selectedReq.amount.toLocaleString()} BDT`}
-                      </h3>
-                      <p className="text-xs text-slate-400">
-                        {selectedReq.userName} ({selectedReq.userEmail})
-                      </p>
-                    </div>
-                    <span
-                      className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold uppercase ${
-                        selectedReq.status === 'approved'
-                          ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                          : selectedReq.status === 'declined'
-                          ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                          : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                      }`}
-                    >
-                      {selectedReq.status}
-                    </span>
-                  </div>
+                const statusBadge =
+                  req.status === 'approved'
+                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                    : req.status === 'declined'
+                    ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                    : 'bg-amber-500/15 text-amber-400 border-amber-500/30';
 
-                  <div className="space-y-2.5 text-xs">
-                    <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/70 flex items-center justify-between">
-                      <span className="text-slate-400">Credits to Grant</span>
-                      <span className="font-mono font-bold text-amber-300 inline-flex items-center gap-1">
-                        <Coins className="w-3.5 h-3.5" />
-                        +
-                        {(
-                          selectedReq.packageCredits ??
-                          packages.find(p => p.id === selectedReq.packageId)?.credits ??
-                          500
-                        ).toLocaleString()}{' '}
-                        Credits
-                      </span>
-                    </div>
+                const matchedPkg = db.getPaymentPackages().find(p => p.id === req.packageId || p.name === req.packageName);
+                const reqCredits = req.packageCredits ?? matchedPkg?.credits ?? 500;
 
-                    <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/70 flex items-center justify-between">
-                      <span className="text-slate-400">Sender Account</span>
-                      <span className="font-mono font-bold text-slate-100">{selectedReq.senderAccount}</span>
-                    </div>
+                return (
+                  <div
+                    key={req.id}
+                    className="p-5 rounded-2xl border border-slate-800 bg-slate-900/90 space-y-4"
+                  >
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`px-2.5 py-0.5 rounded-md border text-[11px] font-bold ${methodBadge}`}>
+                            {req.method}
+                          </span>
+                          <span className={`px-2.5 py-0.5 rounded-md border text-[11px] font-bold uppercase ${statusBadge}`}>
+                            {req.status}
+                          </span>
+                          <span className="text-xs font-bold text-white">{req.packageName}</span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-300 text-[11px] font-mono font-bold">
+                            <Coins className="w-3 h-3" />
+                            <span>+{reqCredits.toLocaleString()} Credits</span>
+                          </span>
+                          <span className="text-sm font-black font-mono tabular-nums text-emerald-400">
+                            {req.currency === 'USDT' ? `$${req.amount} USDT` : `৳${req.amount.toLocaleString()} BDT`}
+                          </span>
+                        </div>
 
-                    <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/70 flex items-center justify-between gap-2">
-                      <div>
-                        <span className="text-[10px] uppercase text-slate-500 block">Transaction ID</span>
-                        <span className="font-mono font-bold text-amber-300">{selectedReq.transactionId}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(selectedReq.id, selectedReq.transactionId)}
-                        className="btn-premium-glass p-2 rounded-lg cursor-pointer"
-                      >
-                        {copiedId === selectedReq.id ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-300">
+                          <span>
+                            User: <strong className="text-white">{req.userName}</strong> ({req.userEmail})
+                          </span>
+                          <span>
+                            Sender: <strong className="font-mono text-white">{req.senderAccount}</strong>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            TrxID: <strong className="font-mono text-amber-300">{req.transactionId}</strong>
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(req.id, req.transactionId)}
+                              className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer"
+                              title="Copy TrxID"
+                            >
+                              {copiedId === req.id ? (
+                                <Check className="w-3 h-3 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                            </button>
+                          </span>
+                        </div>
+
+                        {req.note && (
+                          <p className="text-[11px] text-slate-400">
+                            User Note: <span className="text-slate-300">{req.note}</span>
+                          </p>
                         )}
-                      </button>
-                    </div>
-
-                    {selectedReq.note && (
-                      <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/70">
-                        <span className="text-[10px] uppercase text-slate-500 block mb-0.5">User Note</span>
-                        <p className="text-slate-300">{selectedReq.note}</p>
+                        <p className="text-[10px] font-mono text-slate-500">
+                          Submitted {new Date(req.createdAt).toLocaleString()}
+                          {req.reviewedAt ? ` · Reviewed ${new Date(req.reviewedAt).toLocaleString()}` : ''}
+                        </p>
                       </div>
-                    )}
-                  </div>
 
-                  <div className="space-y-2 text-xs">
-                    <label className="block font-bold text-slate-300">Admin Note / Decline Reason</label>
-                    <input
-                      type="text"
-                      value={reviewNote}
-                      onChange={e => setReviewNote(e.target.value)}
-                      placeholder="Optional approval note or decline explanation..."
-                      className="w-full px-3.5 py-2.5 rounded-xl border text-xs text-slate-100"
-                    />
+                      {/* Approve / Decline Controls */}
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 lg:min-w-[380px]">
+                        <input
+                          type="text"
+                          value={reviewNotes[req.id] ?? req.adminNote ?? ''}
+                          onChange={e => setReviewNotes(prev => ({ ...prev, [req.id]: e.target.value }))}
+                          placeholder="Approval note or decline reason..."
+                          className="flex-1 px-3 py-2 rounded-xl border border-slate-800 bg-slate-950 text-xs text-white focus:outline-none focus:border-amber-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleApprove(req.id)}
+                          disabled={req.status === 'approved'}
+                          className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Approve</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDecline(req.id)}
+                          disabled={req.status === 'declined'}
+                          className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>Decline</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handleApprove(selectedReq.id)}
-                      disabled={selectedReq.status === 'approved'}
-                      className="btn-premium-emerald py-2.5 px-4 rounded-xl text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Approve</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDecline(selectedReq.id)}
-                      disabled={selectedReq.status === 'declined'}
-                      className="py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
-                    >
-                      <XCircle className="w-4 h-4" />
-                      <span>Decline</span>
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="py-12 text-center text-xs text-slate-400">
-                  Select a payment request from the queue to inspect and approve.
-                </div>
-              )}
+                );
+              })}
             </div>
-          </div>
+          )}
         </div>
       ) : (
-        <form onSubmit={handleSaveGateways} className="oe-panel p-6 rounded-2xl space-y-6">
-          <div className="border-b border-slate-800/80 pb-3">
-            <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">
+        /* Gateway Accounts Configuration */
+        <form
+          onSubmit={handleSaveGateways}
+          className="p-6 rounded-2xl border border-slate-800 bg-slate-900/90 space-y-6"
+        >
+          <div className="border-b border-slate-800 pb-3">
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">
               Receiving Account Configuration
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Update live receiving numbers and wallet addresses shown to users on the Payment page.
+              Update the live receiving numbers and wallet addresses shown to users on the payment page.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div className="oe-panel oe-rgb-rose p-4 rounded-xl space-y-3">
+            {/* bKash */}
+            <div className="p-4 rounded-xl border border-rose-500/20 bg-slate-950/60 space-y-3">
               <h3 className="text-xs font-extrabold text-rose-400 uppercase tracking-wider">bKash Settings</h3>
               <div>
                 <label className="block text-[11px] text-slate-400 mb-1">bKash Number</label>
@@ -460,7 +379,7 @@ export const AdminPaymentsPage: React.FC = () => {
                   type="text"
                   value={gateways.bkashNumber}
                   onChange={e => setGateways({ ...gateways, bkashNumber: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border text-xs font-mono text-slate-100"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-800 bg-slate-900 text-xs font-mono text-white focus:outline-none focus:border-rose-500"
                 />
               </div>
               <div>
@@ -469,12 +388,14 @@ export const AdminPaymentsPage: React.FC = () => {
                   type="text"
                   value={gateways.bkashType}
                   onChange={e => setGateways({ ...gateways, bkashType: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border text-xs text-slate-100"
+                  placeholder="Personal (Send Money) / Merchant"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-800 bg-slate-900 text-xs text-white focus:outline-none focus:border-rose-500"
                 />
               </div>
             </div>
 
-            <div className="oe-panel oe-rgb-amber p-4 rounded-xl space-y-3">
+            {/* Nagad */}
+            <div className="p-4 rounded-xl border border-orange-500/20 bg-slate-950/60 space-y-3">
               <h3 className="text-xs font-extrabold text-orange-400 uppercase tracking-wider">Nagad Settings</h3>
               <div>
                 <label className="block text-[11px] text-slate-400 mb-1">Nagad Number</label>
@@ -482,7 +403,7 @@ export const AdminPaymentsPage: React.FC = () => {
                   type="text"
                   value={gateways.nagadNumber}
                   onChange={e => setGateways({ ...gateways, nagadNumber: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border text-xs font-mono text-slate-100"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-800 bg-slate-900 text-xs font-mono text-white focus:outline-none focus:border-orange-500"
                 />
               </div>
               <div>
@@ -491,20 +412,21 @@ export const AdminPaymentsPage: React.FC = () => {
                   type="text"
                   value={gateways.nagadType}
                   onChange={e => setGateways({ ...gateways, nagadType: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border text-xs text-slate-100"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-800 bg-slate-900 text-xs text-white focus:outline-none focus:border-orange-500"
                 />
               </div>
             </div>
 
-            <div className="oe-panel oe-rgb-violet p-4 rounded-xl space-y-3">
-              <h3 className="text-xs font-extrabold text-violet-300 uppercase tracking-wider">Rocket Settings</h3>
+            {/* Rocket */}
+            <div className="p-4 rounded-xl border border-purple-500/20 bg-slate-950/60 space-y-3">
+              <h3 className="text-xs font-extrabold text-purple-400 uppercase tracking-wider">Rocket Settings</h3>
               <div>
                 <label className="block text-[11px] text-slate-400 mb-1">Rocket Number</label>
                 <input
                   type="text"
                   value={gateways.rocketNumber}
                   onChange={e => setGateways({ ...gateways, rocketNumber: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border text-xs font-mono text-slate-100"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-800 bg-slate-900 text-xs font-mono text-white focus:outline-none focus:border-purple-500"
                 />
               </div>
               <div>
@@ -513,16 +435,15 @@ export const AdminPaymentsPage: React.FC = () => {
                   type="text"
                   value={gateways.rocketType}
                   onChange={e => setGateways({ ...gateways, rocketType: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border text-xs text-slate-100"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-800 bg-slate-900 text-xs text-white focus:outline-none focus:border-purple-500"
                 />
               </div>
             </div>
           </div>
 
-          <div className="oe-panel oe-rgb-amber p-4 rounded-xl space-y-4">
-            <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-wider">
-              Binance Pay & Crypto Settings
-            </h3>
+          {/* Binance */}
+          <div className="p-4 rounded-xl border border-amber-400/20 bg-slate-950/60 space-y-4">
+            <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-wider">Binance Pay & Crypto Settings</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-[11px] text-slate-400 mb-1">Binance Pay ID</label>
@@ -530,7 +451,7 @@ export const AdminPaymentsPage: React.FC = () => {
                   type="text"
                   value={gateways.binancePayId}
                   onChange={e => setGateways({ ...gateways, binancePayId: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border text-xs font-mono text-slate-100"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-800 bg-slate-900 text-xs font-mono text-white focus:outline-none focus:border-amber-400"
                 />
               </div>
               <div>
@@ -539,7 +460,7 @@ export const AdminPaymentsPage: React.FC = () => {
                   type="text"
                   value={gateways.binanceTrc20Address}
                   onChange={e => setGateways({ ...gateways, binanceTrc20Address: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border text-xs font-mono text-slate-100"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-800 bg-slate-900 text-xs font-mono text-white focus:outline-none focus:border-amber-400"
                 />
               </div>
               <div>
@@ -548,12 +469,13 @@ export const AdminPaymentsPage: React.FC = () => {
                   type="text"
                   value={gateways.binanceBep20Address}
                   onChange={e => setGateways({ ...gateways, binanceBep20Address: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border text-xs font-mono text-slate-100"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-800 bg-slate-900 text-xs font-mono text-white focus:outline-none focus:border-amber-400"
                 />
               </div>
             </div>
           </div>
 
+          {/* Instructions Note */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1.5">
               Payment Instructions Note (Shown to Users)
@@ -562,13 +484,13 @@ export const AdminPaymentsPage: React.FC = () => {
               rows={2}
               value={gateways.instructionsNote}
               onChange={e => setGateways({ ...gateways, instructionsNote: e.target.value })}
-              className="w-full px-3.5 py-2.5 rounded-xl border text-xs text-slate-100"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-xs text-white focus:outline-none focus:border-amber-500"
             />
           </div>
 
           <button
             type="submit"
-            className="btn-premium-vivid px-6 py-2.5 rounded-xl text-xs inline-flex items-center gap-2 cursor-pointer"
+            className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold flex items-center gap-2 cursor-pointer shadow-md"
           >
             <Save className="w-4 h-4" />
             <span>Save Payment Gateway Settings</span>

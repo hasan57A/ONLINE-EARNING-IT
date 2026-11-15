@@ -2,8 +2,7 @@ import React from 'react';
 import { useRouter, PLATFORM_LOGO_URL } from '../../context/RouterContext';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../services/db';
-import { Mail, Phone, Send, ArrowUpRight, ShieldCheck } from 'lucide-react';
-import { ThemeSwitcher } from '../ui/ThemeSwitcher';
+import { Mail, Phone, Send, ExternalLink, ShieldCheck } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   const { navigate } = useRouter();
@@ -12,42 +11,39 @@ export const Footer: React.FC = () => {
   const tools = db.getTools();
 
   return (
-    <footer className="relative w-full border-t border-slate-800/80 bg-slate-900/90 text-slate-400 text-xs mt-16">
-      <div className="absolute inset-x-[10%] top-0 h-px bg-gradient-to-r from-transparent via-violet-500/70 to-transparent" />
+    <footer className="w-full border-t border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 text-xs transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10">
           {/* Brand & Description */}
           <div className="lg:col-span-2 space-y-4">
-            <button
-              type="button"
+            <div
               onClick={() => navigate('/')}
-              className="flex items-center gap-2.5 cursor-pointer select-none text-left"
+              className="flex items-center gap-2.5 cursor-pointer select-none"
             >
               <img
                 src={PLATFORM_LOGO_URL}
                 alt="ONLINE EARNING IT"
                 className="w-10 h-10 rounded-xl object-contain shadow-md"
               />
-              <span className="text-base font-extrabold text-slate-100 tracking-tight">
-                ONLINE EARNING{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400">
-                  IT
-                </span>
+              <span className="text-base font-bold text-slate-900 dark:text-white uppercase tracking-tight">
+                ONLINE EARNING <span className="text-blue-500">IT</span>
               </span>
-            </button>
-            <p className="text-slate-400 text-xs leading-relaxed max-w-sm">
+            </div>
+            <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed max-w-sm">
               {content.footerDescription}
             </p>
+
+            {/* Social Media Icons */}
             <div className="pt-2">
-              <span className="block text-[11px] font-semibold text-slate-200 mb-2.5">
+              <span className="block text-[11px] font-semibold text-slate-900 dark:text-slate-200 uppercase tracking-wider mb-2">
                 Official Channels
               </span>
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-3">
                 <a
                   href={content.socialLinks.telegram}
                   target="_blank"
                   rel="noreferrer"
-                  className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500 hover:text-white transition-colors"
+                  className="p-2 rounded-lg bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors"
                   title="Telegram"
                 >
                   <Send className="w-4 h-4" />
@@ -56,7 +52,7 @@ export const Footer: React.FC = () => {
                   href={content.socialLinks.facebook}
                   target="_blank"
                   rel="noreferrer"
-                  className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-600 hover:text-white transition-colors"
+                  className="p-2 rounded-lg bg-blue-600/10 text-blue-600 hover:bg-blue-600 hover:text-white transition-colors"
                   title="Facebook"
                 >
                   <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
@@ -67,7 +63,7 @@ export const Footer: React.FC = () => {
                   href={content.socialLinks.instagram}
                   target="_blank"
                   rel="noreferrer"
-                  className="p-2.5 rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-400 hover:bg-pink-500 hover:text-white transition-colors"
+                  className="p-2 rounded-lg bg-pink-500/10 text-pink-500 hover:bg-pink-500 hover:text-white transition-colors"
                   title="Instagram"
                 >
                   <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
@@ -78,107 +74,131 @@ export const Footer: React.FC = () => {
                   href={content.socialLinks.tiktok}
                   target="_blank"
                   rel="noreferrer"
-                  className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 hover:bg-cyan-500 hover:text-white transition-colors"
+                  className="p-2 rounded-lg bg-cyan-500/10 text-cyan-500 hover:bg-cyan-500 hover:text-white transition-colors"
                   title="TikTok"
                 >
                   <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
+                    <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64c.29 0 .58.04.86.11V9.42a6.34 6.34 0 00-.86-.06 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V9.05a8.27 8.27 0 004.77 1.5V7.1a4.86 4.86 0 01-1-.41z" />
                   </svg>
                 </a>
               </div>
             </div>
           </div>
 
-          {/* Platform Tools */}
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold text-slate-100">Platform Tools</h4>
-            <ul className="space-y-2">
-              {tools.map(t => (
-                <li key={t.id}>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/tools/${t.slug}`)}
-                    className="hover:text-violet-300 transition-colors flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <span>{t.name}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-
           {/* Quick Links */}
           <div className="space-y-3">
-            <h4 className="text-xs font-bold text-slate-100">Workspace</h4>
+            <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+              Quick Links
+            </h4>
             <ul className="space-y-2">
               <li>
-                <button type="button" onClick={() => navigate('/dashboard')} className="hover:text-violet-300 transition-colors cursor-pointer">
-                  Dashboard
+                <button onClick={() => navigate('/')} className="hover:text-blue-500 transition-colors">
+                  Homepage
                 </button>
               </li>
               <li>
-                <button type="button" onClick={() => navigate('/payment')} className="hover:text-violet-300 transition-colors cursor-pointer">
-                  Plans & Credits
+                <button onClick={() => navigate('/dashboard')} className="hover:text-blue-500 transition-colors">
+                  User Dashboard
                 </button>
               </li>
               <li>
-                <button type="button" onClick={() => navigate('/resources')} className="hover:text-violet-300 transition-colors cursor-pointer">
+                <button onClick={() => navigate('/resources')} className="hover:text-blue-500 transition-colors">
                   Resources Hub
                 </button>
               </li>
               <li>
-                <button type="button" onClick={() => navigate('/support')} className="hover:text-violet-300 transition-colors cursor-pointer">
-                  Support Center
+                <button onClick={() => navigate('/saved-results')} className="hover:text-blue-500 transition-colors">
+                  Saved Results
                 </button>
               </li>
-              {isAdmin && (
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/admin')}
-                    className="text-violet-300 hover:text-violet-200 font-semibold flex items-center gap-1 cursor-pointer"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>Admin Panel</span>
-                  </button>
-                </li>
-              )}
+              <li>
+                <button onClick={() => navigate('/history')} className="hover:text-blue-500 transition-colors">
+                  Usage History
+                </button>
+              </li>
+              <li>
+                <button onClick={() => navigate('/support')} className="hover:text-blue-500 transition-colors">
+                  Support Ticket
+                </button>
+              </li>
             </ul>
           </div>
 
-          {/* Contact */}
+          {/* Our Services */}
           <div className="space-y-3">
-            <h4 className="text-xs font-bold text-slate-100">Direct Contact</h4>
-            <ul className="space-y-2.5 text-slate-400">
-              <li className="flex items-center gap-2">
-                <Mail className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-                <span className="truncate">{content.contactEmail}</span>
+            <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+              Our Services
+            </h4>
+            <ul className="space-y-2">
+              <li className="hover:text-blue-500 cursor-pointer" onClick={() => navigate('/#services')}>
+                CPA Marketing
               </li>
-              <li className="flex items-center gap-2">
-                <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span className="font-mono tabular-nums">{content.contactPhone}</span>
+              <li className="hover:text-blue-500 cursor-pointer" onClick={() => navigate('/#services')}>
+                Adsterra Methods
               </li>
-              <li className="flex items-center gap-2">
-                <Send className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                <span>{content.contactTelegram}</span>
+              <li className="hover:text-blue-500 cursor-pointer" onClick={() => navigate('/#services')}>
+                Monetag Methods
+              </li>
+              <li className="hover:text-blue-500 cursor-pointer" onClick={() => navigate('/tools')}>
+                Free Marketing Tools
+              </li>
+              <li className="hover:text-blue-500 cursor-pointer" onClick={() => navigate('/#services')}>
+                CPA Account Buy & Sell
               </li>
             </ul>
-            <button
-              type="button"
-              onClick={() => navigate('/support')}
-              className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-violet-300 hover:text-slate-100 cursor-pointer"
-            >
-              <span>Open Support Desk</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </button>
+          </div>
+
+          {/* Available Tools & Contact */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+              Available Tools
+            </h4>
+            <ul className="space-y-2">
+              {tools.slice(0, 5).map(t => (
+                <li key={t.id}>
+                  <button
+                    onClick={() => navigate(`/tools/${t.slug}`)}
+                    className="hover:text-blue-500 transition-colors truncate max-w-[170px] text-left"
+                  >
+                    {t.name}
+                  </button>
+                </li>
+              ))}
+              <li>
+                <button onClick={() => navigate('/tools')} className="text-blue-500 hover:underline">
+                  View All Tools →
+                </button>
+              </li>
+            </ul>
+
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-1.5">
+              <div className="flex items-center gap-2 text-slate-500">
+                <Mail className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{content.contactEmail}</span>
+              </div>
+              <div className="flex items-center gap-2 text-slate-500">
+                <Phone className="w-3.5 h-3.5 shrink-0" />
+                <span>{content.contactPhone}</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="mt-10 pt-6 border-t border-slate-800/70 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
-          <p>© {new Date().getFullYear()} ONLINE EARNING IT. All rights reserved.</p>
-          <div className="flex items-center gap-4">
-            <p className="hidden md:block">Built for performance marketers, media buyers, and QA engineers.</p>
-            <ThemeSwitcher />
+        {/* Bottom Line */}
+        <div className="mt-12 pt-6 border-t border-slate-200 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
+          <p>© {new Date().getFullYear()} ONLINE EARNING IT. All rights reserved. Master Platform.</p>
+          <div className="flex items-center gap-6">
+            <span className="text-slate-500">Privacy Policy · Secure & Confidential</span>
+            <span className="text-slate-500">Terms of Service · Marketing & Dev Tools</span>
+            {isAdmin && (
+              <button
+                onClick={() => navigate('/admin')}
+                className="hover:text-amber-500 flex items-center gap-1 transition-colors cursor-pointer text-amber-500/80"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Admin Console</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

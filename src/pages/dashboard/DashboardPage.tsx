@@ -3,7 +3,6 @@ import { useRouter } from '../../context/RouterContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/ui/Toast';
 import { db } from '../../services/db';
-import { playUiSound } from '../../services/sound';
 import {
   Wrench,
   Activity,
@@ -19,9 +18,8 @@ import {
   Coins,
   Lock,
 } from 'lucide-react';
-import { RealisticToolIcon, TOOL_REALISTIC_IMAGES } from '../../components/ui/RealisticIcon';
+import { RealisticToolIcon } from '../../components/ui/RealisticIcon';
 import { motion } from 'motion/react';
-import { CountUp, TiltCard } from '../../components/motion/kit';
 import { useDbSync } from '../../hooks/useDbSync';
 
 export const DashboardPage: React.FC = () => {
@@ -35,11 +33,6 @@ export const DashboardPage: React.FC = () => {
   const packageCreditTotal = toolAccess.packageCredits ?? toolAccess.remainingCredits;
 
   const tools = db.getTools();
-  const FREE_SLUGS = ['text-shuffler', 'duplicate-text-remover'];
-  const hour = new Date().getHours();
-  const greeting =
-    hour < 5 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 21 ? 'Good evening' : 'Good night';
-  const firstName = (currentUserRecord?.fullName || user?.fullName || 'Member').split(' ')[0];
   const history = db.getUsageHistory(user?.id);
   const savedResults = db.getSavedResults(user?.id || '');
 
@@ -47,10 +40,8 @@ export const DashboardPage: React.FC = () => {
   const totalToolsUsed = history.length;
   const totalSavedResults = savedResults.length;
 
-  const FREE_TARGETS = ['/tools', '/tools/text-shuffler', '/tools/duplicate-text-remover', '/history', '/saved-results'];
   const handleLockedNavigation = (featureName: string, targetPath: string) => {
-    playUiSound('click');
-    if (!isWorkspaceUnlocked && !FREE_TARGETS.includes(targetPath)) {
+    if (!isWorkspaceUnlocked) {
       showToast(
         toolAccess.planStatus === 'pending'
           ? `Your package payment is pending admin approval. "${featureName}" unlocks once approved.`
@@ -63,14 +54,17 @@ export const DashboardPage: React.FC = () => {
     navigate(targetPath);
   };
 
+  // 7-day usage aggregation
   const sevenDayChartData = useMemo(() => {
     const days: Array<{ label: string; count: number; dateStr: string }> = [];
     const now = new Date();
+
     for (let i = 6; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split('T')[0];
       const dayLabel = d.toLocaleDateString(undefined, { weekday: 'short' });
+
       const dayCount = history.filter(h => h.date === dateStr).length;
       days.push({ label: dayLabel, count: dayCount, dateStr });
     }
@@ -86,7 +80,6 @@ export const DashboardPage: React.FC = () => {
       return;
     }
     navigator.clipboard.writeText(text);
-    playUiSound('copy');
     showToast('Copied saved results to clipboard!', 'success');
   };
 
@@ -103,7 +96,6 @@ export const DashboardPage: React.FC = () => {
     link.download = filename.endsWith('.txt') ? filename : `${filename}.txt`;
     link.click();
     URL.revokeObjectURL(url);
-    playUiSound('click');
     showToast('Downloaded text file successfully.', 'success');
   };
 
@@ -114,36 +106,32 @@ export const DashboardPage: React.FC = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="oe-panel oe-rgb-violet p-6 sm:p-10 rounded-3xl relative overflow-hidden grid grid-cols-1 lg:grid-cols-[1.25fr_1fr] gap-8 items-center"
+        className="p-6 sm:p-8 rounded-3xl border border-blue-500/30 bg-gradient-to-r from-slate-950 via-blue-950/60 to-slate-950 relative overflow-hidden shadow-2xl"
       >
-        <div className="absolute -right-10 -top-24 w-[28rem] h-[28rem] bg-violet-600/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -left-24 -bottom-32 w-96 h-96 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 space-y-4 max-w-2xl">
-          <div className="inline-flex items-center gap-2 text-xs font-bold text-violet-300 bg-violet-500/15 border border-violet-500/30 px-3.5 py-1 rounded-full backdrop-blur-md">
+        <div className="absolute right-0 top-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 space-y-3 max-w-2xl">
+          <div className="inline-flex items-center gap-2 text-xs font-bold text-blue-400 bg-blue-500/15 border border-blue-500/30 px-3.5 py-1 rounded-full backdrop-blur-md">
             <span className="flex h-2 w-2 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
             </span>
             <span>Authenticated Workspace · Session Active</span>
           </div>
-          <h1 className="text-3xl sm:text-5xl font-black text-slate-100 tracking-tight leading-[1.1]">
-            {greeting},{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-300 via-fuchsia-300 to-cyan-200">
-              {firstName}
-            </span>{' '}
-            <Sparkles className="w-6 h-6 text-amber-300 hidden sm:inline -translate-y-1" />
+          <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-2.5">
+            Hello, Welcome to ONLINE EARNING IT!
+            <Sparkles className="w-5 h-5 text-amber-300 hidden sm:inline" />
           </h1>
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            Ready to generate high-performance user agents, extract fresh test leads, or normalize bulk copy? Select any tool below to begin.
+            Ready to generate high-performance user agents, simulate test leads, or clean bulk copy? Select any tool below to begin your workflow.
           </p>
           <div className="pt-1 flex flex-wrap items-center gap-3">
             <button
               onClick={() => navigate('/payment')}
-              className={`px-4 py-2.5 rounded-xl border text-xs font-bold inline-flex items-center gap-2 transition-colors cursor-pointer ${
+              className={`px-4 py-2 rounded-xl border text-xs font-bold inline-flex items-center gap-2 transition-colors cursor-pointer ${
                 toolAccess.isAdmin
                   ? 'bg-emerald-600/20 hover:bg-emerald-600/30 border-emerald-400/30 text-emerald-200'
                   : toolAccess.hasUsablePackage
-                  ? 'bg-violet-600/25 hover:bg-violet-600/35 border-violet-400/40 text-violet-100'
+                  ? 'bg-blue-600/20 hover:bg-blue-600/30 border-blue-400/30 text-blue-200'
                   : 'bg-rose-600/25 hover:bg-rose-600/35 border-rose-400/40 text-rose-200'
               }`}
             >
@@ -168,50 +156,25 @@ export const DashboardPage: React.FC = () => {
             {!toolAccess.isAdmin && toolAccess.hasUsablePackage && (
               <button
                 onClick={() => navigate('/payment')}
-                className="btn-premium-vivid px-4 py-2.5 rounded-xl text-xs inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-xs font-bold text-white inline-flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <CreditCard className="w-3.5 h-3.5" />
+                <CreditCard className="w-3.5 h-3.5 text-blue-300" />
                 <span>Top Up Credits</span>
               </button>
             )}
           </div>
         </div>
-
-        {/* Real 3D tool showcase */}
-        <div className="relative z-10 hidden lg:block h-64">
-          {[
-            { slug: 'text-shuffler', cls: 'left-2 top-0', delay: 0 },
-            { slug: 'duplicate-text-remover', cls: 'right-6 top-6', delay: 0.6 },
-            { slug: 'user-agent-generator', cls: 'left-24 top-28', delay: 1.1 },
-            { slug: 'mail-generator', cls: 'right-0 bottom-0', delay: 0.3 },
-          ].map(it => (
-            <motion.div
-              key={it.slug}
-              className={`absolute ${it.cls}`}
-              initial={{ opacity: 0, scale: 0.4, rotate: -12 }}
-              animate={{ opacity: 1, scale: 1, rotate: 0, y: [0, -12, 0] }}
-              transition={{
-                opacity: { duration: 0.6, delay: 0.3 + it.delay * 0.3 },
-                scale: { type: 'spring', stiffness: 150, damping: 13, delay: 0.3 + it.delay * 0.3 },
-                rotate: { duration: 0.8, delay: 0.3 + it.delay * 0.3 },
-                y: { duration: 6 + it.delay * 2, repeat: Infinity, ease: 'easeInOut', delay: it.delay },
-              }}
-            >
-              <RealisticToolIcon slug={it.slug} size="xl" />
-            </motion.div>
-          ))}
-        </div>
       </motion.div>
 
       {/* Locked Account Alert Bar */}
       {!isWorkspaceUnlocked && (
-        <div className="oe-panel oe-rgb-rose p-5 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="p-5 rounded-3xl border border-rose-500/40 bg-gradient-to-r from-rose-950/60 via-slate-900 to-slate-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
           <div className="flex items-start gap-3.5">
             <div className="p-2.5 rounded-xl bg-rose-500/20 text-rose-400 shrink-0 mt-0.5">
               {toolAccess.planStatus === 'pending' ? <Clock className="w-5 h-5 text-amber-400" /> : <Lock className="w-5 h-5" />}
             </div>
             <div>
-              <h3 className="text-sm font-extrabold text-slate-100">
+              <h3 className="text-sm font-extrabold text-white">
                 {toolAccess.planStatus === 'pending'
                   ? 'Package Approval Pending — Features Remain Locked'
                   : 'No Active Package — Please Take a Package First'}
@@ -225,7 +188,7 @@ export const DashboardPage: React.FC = () => {
           </div>
           <button
             onClick={() => navigate('/payment')}
-            className="btn-premium-vivid px-5 py-2.5 rounded-xl text-xs inline-flex items-center justify-center gap-2 shrink-0 cursor-pointer whitespace-nowrap"
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-extrabold inline-flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-lg shadow-blue-600/25"
           >
             <CreditCard className="w-4 h-4" />
             <span>{toolAccess.planStatus === 'pending' ? 'View Payment Status' : 'Take a Package Now'}</span>
@@ -239,8 +202,10 @@ export const DashboardPage: React.FC = () => {
           whileHover={{ y: -4 }}
           transition={{ duration: 0.2 }}
           onClick={() => navigate('/payment')}
-          className={`oe-panel oe-panel-hover p-6 rounded-3xl flex items-center gap-4 group cursor-pointer ${
-            isWorkspaceUnlocked ? 'oe-rgb-amber' : 'oe-rgb-rose'
+          className={`p-6 rounded-3xl border bg-slate-900/80 hover:bg-slate-900 transition-all flex items-center gap-4 shadow-xl group cursor-pointer ${
+            isWorkspaceUnlocked
+              ? 'border-amber-500/30 hover:border-amber-400/60'
+              : 'border-rose-500/40 hover:border-rose-400/70'
           }`}
         >
           <div
@@ -254,7 +219,7 @@ export const DashboardPage: React.FC = () => {
           </div>
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Package Credits</p>
-            <p className="text-3xl font-black text-slate-100 font-mono tabular-nums mt-0.5 truncate">
+            <p className="text-3xl font-black text-white font-mono tabular-nums mt-0.5 truncate">
               {toolAccess.isAdmin ? 'Unlimited' : toolAccess.remainingCredits.toLocaleString()}
             </p>
             <p className="text-[11px] font-semibold text-amber-400 truncate mt-0.5">
@@ -272,15 +237,15 @@ export const DashboardPage: React.FC = () => {
         <motion.div
           whileHover={{ y: -4 }}
           transition={{ duration: 0.2 }}
-          className="oe-panel oe-panel-hover oe-rgb-violet p-6 rounded-3xl flex items-center gap-4 group"
+          className="p-6 rounded-3xl border border-white/10 bg-slate-900/80 hover:border-blue-500/50 hover:bg-slate-900 transition-all flex items-center gap-4 shadow-xl group"
         >
-          <div className="w-14 h-14 rounded-2xl bg-violet-500/15 border border-violet-500/30 text-violet-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-md">
+          <div className="w-14 h-14 rounded-2xl bg-blue-500/15 border border-blue-500/30 text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-md">
             <Wrench className="w-6 h-6" />
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Tools Available</p>
-            <p className="text-3xl font-black text-slate-100 font-mono tabular-nums mt-0.5">
-              <CountUp value={String(totalToolsAvailable)} />
+            <p className="text-3xl font-black text-white font-mono tabular-nums mt-0.5">
+              {totalToolsAvailable}
             </p>
           </div>
         </motion.div>
@@ -288,15 +253,15 @@ export const DashboardPage: React.FC = () => {
         <motion.div
           whileHover={{ y: -4 }}
           transition={{ duration: 0.2 }}
-          className="oe-panel oe-panel-hover oe-rgb-emerald p-6 rounded-3xl flex items-center gap-4 group"
+          className="p-6 rounded-3xl border border-white/10 bg-slate-900/80 hover:border-emerald-500/50 hover:bg-slate-900 transition-all flex items-center gap-4 shadow-xl group"
         >
           <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-md">
             <Activity className="w-6 h-6" />
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Tools Used</p>
-            <p className="text-3xl font-black text-slate-100 font-mono tabular-nums mt-0.5">
-              <CountUp value={String(totalToolsUsed)} />
+            <p className="text-3xl font-black text-white font-mono tabular-nums mt-0.5">
+              {totalToolsUsed}
             </p>
           </div>
         </motion.div>
@@ -304,15 +269,15 @@ export const DashboardPage: React.FC = () => {
         <motion.div
           whileHover={{ y: -4 }}
           transition={{ duration: 0.2 }}
-          className="oe-panel oe-panel-hover oe-rgb-cyan p-6 rounded-3xl flex items-center gap-4 group"
+          className="p-6 rounded-3xl border border-white/10 bg-slate-900/80 hover:border-indigo-500/50 hover:bg-slate-900 transition-all flex items-center gap-4 shadow-xl group"
         >
-          <div className="w-14 h-14 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-md">
+          <div className="w-14 h-14 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-md">
             <Bookmark className="w-6 h-6" />
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Saved Results</p>
-            <p className="text-3xl font-black text-slate-100 font-mono tabular-nums mt-0.5">
-              <CountUp value={String(totalSavedResults)} />
+            <p className="text-3xl font-black text-white font-mono tabular-nums mt-0.5">
+              {totalSavedResults}
             </p>
           </div>
         </motion.div>
@@ -321,41 +286,43 @@ export const DashboardPage: React.FC = () => {
       {/* Middle Split: 7-Day Usage Chart & Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* 7-Day Usage Chart */}
-        <div className="lg:col-span-7 oe-panel p-7 rounded-3xl flex flex-col justify-between space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
+        <div className="lg:col-span-7 p-7 rounded-3xl border border-white/10 bg-slate-900/80 shadow-xl flex flex-col justify-between space-y-6">
+          <div className="flex items-center justify-between border-b border-white/5 pb-4">
             <div>
               <div className="flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-violet-400" />
-                <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">7-Day Tool Usage Activity</h2>
+                <TrendingUp className="w-4 h-4 text-blue-400" />
+                <h2 className="text-sm font-bold text-white uppercase tracking-wider">7-Day Tool Usage Activity</h2>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">Real-time daily tool execution metrics</p>
             </div>
-            <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+            <span className="text-xs font-mono font-bold px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
               {history.length} Events
             </span>
           </div>
 
-          <div className="h-52 flex items-end justify-between gap-3 pt-6 pb-2 px-2 border-b border-slate-800/80">
+          {/* Interactive Bar Chart */}
+          <div className="h-52 flex items-end justify-between gap-3 pt-6 pb-2 px-2 border-b border-white/5">
             {sevenDayChartData.map((d, idx) => {
               const heightPercent = Math.max(12, Math.round((d.count / maxChartCount) * 100));
               return (
                 <div key={idx} className="flex-1 flex flex-col items-center gap-2 group relative">
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-9 px-2.5 py-1 rounded-lg bg-slate-900 text-[10px] text-slate-100 font-mono pointer-events-none whitespace-nowrap z-20 border border-slate-700 shadow-lg">
+                  {/* Tooltip */}
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-9 px-2.5 py-1 rounded-lg bg-slate-800 text-[10px] text-white font-mono pointer-events-none whitespace-nowrap z-20 border border-white/10 shadow-lg">
                     {d.count} runs on {d.dateStr}
                   </div>
-                  <div className="w-full max-w-[42px] bg-slate-950 rounded-t-xl h-40 flex items-end justify-center p-1 border border-slate-800">
+                  <div className="w-full max-w-[42px] bg-slate-950 rounded-t-xl h-40 flex items-end justify-center p-1 border border-white/5">
                     <motion.div
                       initial={{ height: 0 }}
                       animate={{ height: `${heightPercent}%` }}
                       transition={{ duration: 0.6, delay: idx * 0.08, ease: 'easeOut' }}
                       className={`w-full rounded-lg transition-colors ${
-                        d.count > 0
-                          ? 'bg-gradient-to-t from-violet-600 via-indigo-500 to-cyan-400'
-                          : 'bg-slate-800'
+                        d.count > 0 ? 'bg-gradient-to-t from-blue-600 to-indigo-500 group-hover:from-blue-500 group-hover:to-indigo-400' : 'bg-slate-800'
                       }`}
                     />
                   </div>
-                  <span className="text-[11px] font-bold text-slate-400 font-mono">{d.label}</span>
+                  <span className="text-[11px] font-bold text-slate-400 font-mono">
+                    {d.label}
+                  </span>
                 </div>
               );
             })}
@@ -365,7 +332,7 @@ export const DashboardPage: React.FC = () => {
             <span>Telemetry updated live</span>
             <button
               onClick={() => handleLockedNavigation('Usage History', '/history')}
-              className="text-violet-400 hover:text-violet-300 font-bold flex items-center gap-1 cursor-pointer"
+              className="text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 cursor-pointer"
             >
               {!isWorkspaceUnlocked && <Lock className="w-3 h-3 text-rose-400" />}
               <span>View Usage Log</span>
@@ -375,12 +342,12 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* Recent Activity */}
-        <div className="lg:col-span-5 oe-panel p-7 rounded-3xl flex flex-col justify-between space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
-            <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">Recent Activity</h2>
+        <div className="lg:col-span-5 p-7 rounded-3xl border border-white/10 bg-slate-900/80 shadow-xl flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between border-b border-white/5 pb-4">
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Recent Activity</h2>
             <button
               onClick={() => handleLockedNavigation('Usage History', '/history')}
-              className="text-xs text-violet-400 hover:underline font-bold cursor-pointer inline-flex items-center gap-1"
+              className="text-xs text-blue-400 hover:underline font-bold cursor-pointer inline-flex items-center gap-1"
             >
               {!isWorkspaceUnlocked && <Lock className="w-3 h-3 text-rose-400" />}
               <span>View All</span>
@@ -389,7 +356,7 @@ export const DashboardPage: React.FC = () => {
 
           {history.length === 0 ? (
             <div className="py-14 text-center text-slate-400 text-xs space-y-2">
-              <Clock className="w-8 h-8 mx-auto opacity-30 text-violet-400" />
+              <Clock className="w-8 h-8 mx-auto opacity-30 text-blue-400" />
               <p className="font-semibold text-slate-300">No activity yet</p>
               <p className="text-slate-500">Run any tool to record your first execution log.</p>
             </div>
@@ -398,10 +365,12 @@ export const DashboardPage: React.FC = () => {
               {history.slice(0, 5).map(item => (
                 <div
                   key={item.id}
-                  className="p-3.5 rounded-2xl border border-slate-800/80 bg-slate-950/70 flex items-center justify-between gap-3 text-xs hover:border-violet-500/30 transition-colors"
+                  className="p-3.5 rounded-2xl border border-white/5 bg-slate-950/70 flex items-center justify-between gap-3 text-xs hover:border-white/10 transition-colors"
                 >
                   <div className="min-w-0">
-                    <p className="font-bold text-slate-100 truncate">{item.toolName}</p>
+                    <p className="font-bold text-white truncate">
+                      {item.toolName}
+                    </p>
                     <p className="text-[11px] text-slate-400 font-mono tabular-nums mt-0.5">
                       {item.date} · {item.time} · {item.resultCount} items
                     </p>
@@ -415,9 +384,9 @@ export const DashboardPage: React.FC = () => {
             </div>
           )}
 
-          <div className="pt-2 border-t border-slate-800/80">
+          <div className="pt-2 border-t border-white/5">
             <p className="text-[11px] text-slate-500">
-              Private user activity tracked with real-time pool consumption.
+              Private user activity stored locally in browser sandbox.
             </p>
           </div>
         </div>
@@ -427,16 +396,16 @@ export const DashboardPage: React.FC = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-slate-100">Quick Access Tools</h2>
+            <h2 className="text-lg font-bold text-white">Quick Access Tools</h2>
             <p className="text-xs text-slate-400">
               {isWorkspaceUnlocked
                 ? 'Fast one-click access to all available utilities'
-                : 'Text Shuffler & Duplicate Remover are free — generators unlock with a package'}
+                : 'Locked until you take an active package — click any tool to choose a package'}
             </p>
           </div>
           <button
             onClick={() => handleLockedNavigation('All Tools', '/tools')}
-            className="text-xs font-bold text-violet-400 hover:text-violet-300 flex items-center gap-1 cursor-pointer"
+            className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 cursor-pointer"
           >
             {!isWorkspaceUnlocked && <Lock className="w-3 h-3 text-rose-400" />}
             <span>All 6 Tools</span>
@@ -445,65 +414,52 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {tools.map((tool, i) => {
-            const isFree = FREE_SLUGS.includes(tool.slug);
-            const open = isFree || isWorkspaceUnlocked;
-            return (
-              <TiltCard
-                key={tool.id}
-                max={7}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-40px' }}
-                transition={{ duration: 0.6, delay: i * 0.07, ease: [0.16, 1, 0.3, 1] }}
-                onClick={() => handleLockedNavigation(tool.name, `/tools/${tool.slug}`)}
-                className={`oe-panel oe-panel-hover relative overflow-hidden p-6 rounded-3xl cursor-pointer flex flex-col justify-between gap-5 group ${
-                  isFree ? 'oe-rgb-emerald' : open ? 'oe-rgb-violet' : 'oe-rgb-amber'
+          {tools.map(tool => (
+            <motion.div
+              key={tool.id}
+              whileHover={{ y: -4 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => handleLockedNavigation(tool.name, `/tools/${tool.slug}`)}
+              className={`p-6 rounded-3xl border bg-slate-900/80 hover:bg-slate-900 transition-all cursor-pointer flex flex-col justify-between space-y-3.5 shadow-xl group ${
+                isWorkspaceUnlocked
+                  ? 'border-white/10 hover:border-blue-500/50'
+                  : 'border-rose-500/20 hover:border-rose-500/50'
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <RealisticToolIcon slug={tool.slug} size="md" />
+                {isWorkspaceUnlocked ? (
+                  <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Ready</span>
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono font-bold text-rose-300 bg-rose-500/10 border border-rose-500/30 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                    <Lock className="w-3 h-3" />
+                    <span>Package Required</span>
+                  </span>
+                )}
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white group-hover:text-blue-300 transition-colors">
+                  {tool.name}
+                </h3>
+                <p className="text-xs text-slate-300 line-clamp-2 mt-1">
+                  {tool.description}
+                </p>
+              </div>
+              <div
+                className={`pt-2 flex items-center justify-between text-xs font-bold ${
+                  isWorkspaceUnlocked
+                    ? 'text-blue-400 group-hover:text-blue-300'
+                    : 'text-rose-400 group-hover:text-rose-300'
                 }`}
               >
-                {TOOL_REALISTIC_IMAGES[tool.slug] && (
-                  <img
-                    src={TOOL_REALISTIC_IMAGES[tool.slug]}
-                    alt=""
-                    aria-hidden="true"
-                    className="absolute -right-8 -bottom-8 w-40 h-40 object-cover rounded-full opacity-[0.14] group-hover:opacity-30 group-hover:scale-110 group-hover:rotate-6 transition-all duration-700 pointer-events-none blur-[1px]"
-                  />
-                )}
-                <div className="relative flex items-start justify-between">
-                  <RealisticToolIcon slug={tool.slug} size="lg" />
-                  {isFree ? (
-                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold uppercase">
-                      100% FREE
-                    </span>
-                  ) : open ? (
-                    <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <span>Ready</span>
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                      <Lock className="w-3 h-3" />
-                      <span>Package</span>
-                    </span>
-                  )}
-                </div>
-                <div className="relative">
-                  <h3 className="text-lg font-bold text-slate-100 group-hover:text-violet-300 transition-colors">
-                    {tool.name}
-                  </h3>
-                  <p className="text-xs text-slate-300 line-clamp-2 mt-1.5 leading-relaxed">{tool.description}</p>
-                </div>
-                <div
-                  className={`relative flex items-center justify-between text-xs font-bold ${
-                    isFree ? 'text-emerald-300' : open ? 'text-violet-300' : 'text-amber-300'
-                  }`}
-                >
-                  <span>{isFree ? 'Use for Free' : open ? 'Launch Tool' : 'Take Package to Unlock'}</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
-                </div>
-              </TiltCard>
-            );
-          })}
+                <span>{isWorkspaceUnlocked ? 'Launch Tool' : 'Take Package to Unlock'}</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </motion.div>
+          ))}
         </div>
       </div>
 
@@ -511,12 +467,12 @@ export const DashboardPage: React.FC = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-slate-100">Recent Saved Results</h2>
-            <p className="text-xs text-slate-400">Exports and generator outputs pinned for quick retrieval</p>
+            <h2 className="text-lg font-bold text-white">Recent Saved Results</h2>
+            <p className="text-xs text-slate-400">Exports and generator outputs you pinned for quick retrieval</p>
           </div>
           <button
             onClick={() => handleLockedNavigation('Saved Results', '/saved-results')}
-            className="text-xs font-bold text-violet-400 hover:text-violet-300 flex items-center gap-1 cursor-pointer"
+            className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 cursor-pointer"
           >
             {!isWorkspaceUnlocked && <Lock className="w-3 h-3 text-rose-400" />}
             <span>View All ({savedResults.length})</span>
@@ -525,25 +481,27 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {savedResults.length === 0 ? (
-          <div className="oe-panel p-10 rounded-3xl text-center text-xs text-slate-400 space-y-2">
-            <Bookmark className="w-8 h-8 mx-auto opacity-30 text-violet-400" />
-            <p className="font-bold text-slate-100">No saved results yet</p>
-            <p className="text-slate-400">Click "Save to My List" inside any tool to bookmark outputs.</p>
+          <div className="p-10 rounded-3xl border border-white/10 bg-slate-900/60 text-center text-xs text-slate-400 space-y-2">
+            <Bookmark className="w-8 h-8 mx-auto opacity-30 text-blue-400" />
+            <p className="font-bold text-white">No saved results yet</p>
+            <p className="text-slate-400">Click "Save Results" inside any tool to bookmark outputs.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {savedResults.slice(0, 3).map(saved => (
               <div
                 key={saved.id}
-                className="oe-panel oe-panel-hover p-6 rounded-3xl flex flex-col justify-between space-y-4"
+                className="p-6 rounded-3xl border border-white/10 bg-slate-900/80 shadow-xl flex flex-col justify-between space-y-4"
               >
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between text-xs text-slate-400">
-                    <span className="font-bold text-violet-400 font-mono">{saved.toolName}</span>
+                    <span className="font-bold text-blue-400 font-mono">{saved.toolName}</span>
                     <span className="font-mono tabular-nums text-slate-400">{saved.count} entries</span>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-100 truncate">{saved.title}</h4>
-                  <pre className="text-[11px] font-mono text-slate-300 bg-slate-950 p-3 rounded-xl overflow-x-auto max-h-24 whitespace-pre-wrap leading-tight border border-slate-800">
+                  <h4 className="text-sm font-bold text-white truncate">
+                    {saved.title}
+                  </h4>
+                  <pre className="text-[11px] font-mono text-slate-300 bg-slate-950 p-3 rounded-xl overflow-x-auto max-h-24 whitespace-pre-wrap leading-tight border border-white/5">
                     {saved.resultsText.slice(0, 160)}
                     {saved.resultsText.length > 160 ? '...' : ''}
                   </pre>
@@ -552,14 +510,14 @@ export const DashboardPage: React.FC = () => {
                 <div className="pt-2 flex items-center gap-2">
                   <button
                     onClick={() => copyToClipboard(saved.resultsText)}
-                    className="btn-premium-emerald flex-1 py-2 px-3 text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="flex-1 py-2 px-3 text-xs font-bold rounded-xl border border-white/10 hover:bg-slate-800 flex items-center justify-center gap-1.5 text-slate-200 transition-colors cursor-pointer"
                   >
                     <Copy className="w-3.5 h-3.5" />
                     <span>Copy</span>
                   </button>
                   <button
                     onClick={() => downloadText(saved.title, saved.resultsText)}
-                    className="btn-premium-cyan flex-1 py-2 px-3 text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="flex-1 py-2 px-3 text-xs font-bold rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer"
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>Download</span>
@@ -573,3 +531,4 @@ export const DashboardPage: React.FC = () => {
     </div>
   );
 };
+

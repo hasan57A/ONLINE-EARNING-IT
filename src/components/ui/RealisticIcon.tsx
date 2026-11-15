@@ -16,14 +16,13 @@ export const TOOL_REALISTIC_IMAGES: Record<string, string> = {
   'mail-generator': iconMail,
 };
 
-// Per-tool aura colours used by the rotating premium ring + under-glow
-const AURA: Record<string, [string, string]> = {
-  'user-agent-generator': ['#3b82f6', '#22d3ee'],
-  'lead-generator': ['#10b981', '#a3e635'],
-  'text-shuffler': ['#a855f7', '#ec4899'],
-  'duplicate-text-remover': ['#f59e0b', '#fb7185'],
-  'number-generator': ['#06b6d4', '#6366f1'],
-  'mail-generator': ['#c084fc', '#f472b6'],
+const GLOW_COLORS: Record<string, string> = {
+  'user-agent-generator': 'shadow-[0_8px_25px_-4px_rgba(59,130,246,0.5)] border-blue-500/40',
+  'lead-generator': 'shadow-[0_8px_25px_-4px_rgba(16,185,129,0.5)] border-emerald-500/40',
+  'text-shuffler': 'shadow-[0_8px_25px_-4px_rgba(139,92,246,0.5)] border-purple-500/40',
+  'duplicate-text-remover': 'shadow-[0_8px_25px_-4px_rgba(245,158,11,0.5)] border-amber-500/40',
+  'number-generator': 'shadow-[0_8px_25px_-4px_rgba(6,182,212,0.5)] border-cyan-500/40',
+  'mail-generator': 'shadow-[0_8px_25px_-4px_rgba(168,85,247,0.5)] border-purple-500/40',
 };
 
 const FALLBACK_ICONS: Record<string, React.ReactNode> = {
@@ -56,8 +55,8 @@ export const RealisticToolIcon: React.FC<RealisticIconProps> = ({
   alt,
 }) => {
   const imgSrc = TOOL_REALISTIC_IMAGES[slug];
+  const glow = GLOW_COLORS[slug] || 'shadow-[0_8px_25px_-4px_rgba(59,130,246,0.3)] border-slate-700';
   const sizeClass = SIZE_CLASSES[size];
-  const [c1, c2] = AURA[slug] || ['#8468ff', '#c658f1'];
 
   if (!imgSrc) {
     return (
@@ -69,26 +68,18 @@ export const RealisticToolIcon: React.FC<RealisticIconProps> = ({
     );
   }
 
-  const style = { ['--oe-c1' as string]: c1, ['--oe-c2' as string]: c2 } as React.CSSProperties;
-  // Small icons stay still so sidebars and lists feel calm
-  const motionOff = size === 'sm' ? { animation: 'none' } : {};
-
   return (
     <div
-      className={`oe-icon ${sizeClass} ${className}`}
-      style={{ ...style, ...motionOff }}
+      className={`relative group shrink-0 overflow-hidden border p-0.5 bg-slate-950/80 transition-all duration-300 hover:scale-105 ${sizeClass} ${glow} ${className}`}
     >
-      <div className="oe-icon-face">
-        <img
-          src={imgSrc}
-          alt={alt || `${slug} realistic 3D icon`}
-          className="w-full h-full object-cover"
-          loading="lazy"
-        />
-        {/* Glass specular highlight */}
-        <div className="absolute inset-0 bg-gradient-to-br from-white/25 via-transparent to-black/20 pointer-events-none" />
-        <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" />
-      </div>
+      <img
+        src={imgSrc}
+        alt={alt || `${slug} realistic 3D icon`}
+        className="w-full h-full object-cover rounded-[inherit]"
+        loading="lazy"
+      />
+      {/* Glossy top specular reflection */}
+      <div className="absolute inset-0 bg-gradient-to-b from-white/15 via-transparent to-transparent pointer-events-none rounded-[inherit]" />
     </div>
   );
 };

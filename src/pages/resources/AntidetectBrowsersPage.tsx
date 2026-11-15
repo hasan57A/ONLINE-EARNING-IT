@@ -2,12 +2,12 @@ import React from 'react';
 import { useRouter } from '../../context/RouterContext';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../services/db';
-import { playUiSound } from '../../services/sound';
 import {
   Layers,
   Download,
   ArrowLeft,
   Shield,
+  ExternalLink,
 } from 'lucide-react';
 
 export const AntidetectBrowsersPage: React.FC = () => {
@@ -18,28 +18,25 @@ export const AntidetectBrowsersPage: React.FC = () => {
   return (
     <div className="space-y-8">
       {/* Top back & Header */}
-      <div className="space-y-4">
+      <div className="space-y-3">
         <button
-          onClick={() => {
-            playUiSound('click');
-            navigate('/resources');
-          }}
-          className="btn-premium-glass inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-slate-100 cursor-pointer"
+          onClick={() => navigate('/resources')}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back to Resources Hub</span>
         </button>
 
-        <div className="oe-panel oe-rgb-cyan rounded-3xl p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold text-cyan-300 uppercase tracking-widest">
+            <div className="flex items-center gap-2 text-xs font-semibold text-indigo-500 uppercase tracking-widest">
               <Layers className="w-4 h-4" />
               <span>Multi-Accounting & Fingerprinting</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-100 tracking-tight mt-1">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1">
               Best Antidetect Browsers
             </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
               Leading antidetect browsers with fingerprint customization, proxy integration, and automated profile management.
             </p>
           </div>
@@ -47,7 +44,7 @@ export const AntidetectBrowsersPage: React.FC = () => {
           {isAdmin && (
             <button
               onClick={() => navigate('/admin/settings')}
-              className="btn-premium-glass py-2.5 px-4 text-xs font-semibold rounded-xl text-amber-300 border-amber-500/30 flex items-center gap-1.5 self-start sm:self-auto whitespace-nowrap shrink-0 cursor-pointer"
+              className="py-2 px-3 text-xs font-semibold rounded-xl bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-colors flex items-center gap-1.5 self-start sm:self-auto"
             >
               <Shield className="w-3.5 h-3.5" />
               <span>Manage Browsers</span>
@@ -58,22 +55,22 @@ export const AntidetectBrowsersPage: React.FC = () => {
 
       {/* Content Grid */}
       {browsers.length === 0 ? (
-        <div className="oe-panel oe-rgb-cyan p-12 rounded-3xl text-center space-y-4">
-          <div className="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 flex items-center justify-center mx-auto">
+        <div className="p-12 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center mx-auto">
             <Layers className="w-6 h-6" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-base font-bold text-slate-100">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
               No Antidetect Browsers Published Yet
             </h3>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              Public resource listings remain empty until an administrator publishes them or seeds curated browser lists.
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              Per platform rules, public resource listings remain empty until an administrator publishes them or seeds curated browser lists.
             </p>
           </div>
           {isAdmin ? (
             <button
               onClick={() => navigate('/admin/settings')}
-              className="btn-premium-cyan py-2.5 px-5 text-xs rounded-xl cursor-pointer"
+              className="py-2.5 px-5 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
             >
               Go to Admin Settings to Add / Seed
             </button>
@@ -88,29 +85,29 @@ export const AntidetectBrowsersPage: React.FC = () => {
           {browsers.map((b, index) => (
             <div
               key={b.id || index}
-              className="oe-panel oe-panel-hover oe-rgb-cyan p-6 rounded-3xl flex flex-col justify-between space-y-5"
+              className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 hover:border-indigo-500/40 transition-all flex flex-col justify-between space-y-4 shadow-sm"
             >
               <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 flex items-center justify-center font-black">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center font-bold">
                     {b.name.charAt(0)}
                   </div>
-                  <h3 className="text-base font-bold text-slate-100">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
                     {b.name}
                   </h3>
                 </div>
 
-                <p className="text-xs text-slate-300 leading-relaxed">
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                   {b.description}
                 </p>
               </div>
 
-              <div className="pt-3 border-t border-slate-800/80">
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
                 <a
                   href={b.downloadUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="btn-premium-cyan w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap"
+                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Download Browser</span>
