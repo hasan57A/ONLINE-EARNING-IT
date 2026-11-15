@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { db } from '../services/db';
 
 export type ThemeMode =
   | 'midnight'
@@ -7,6 +8,8 @@ export type ThemeMode =
   | 'gold'
   | 'crimson'
   | 'oceanic';
+
+export type DisplayMode = 'dark' | 'light' | 'system';
 
 export interface ThemeMeta {
   id: ThemeMode;
@@ -20,26 +23,26 @@ export interface ThemeMeta {
 export const PREMIUM_THEMES: ThemeMeta[] = [
   {
     id: 'midnight',
-    name: 'Midnight Cyber',
-    subtitle: 'Deep Navy · Electric Blue',
-    swatchPrimary: '#3b82f6',
-    swatchBg: '#020617',
-    badgeText: 'text-blue-400',
+    name: 'Aurora Noir',
+    subtitle: 'Ink Violet · Iris Glow',
+    swatchPrimary: '#7c3aed',
+    swatchBg: '#070913',
+    badgeText: 'text-violet-400',
   },
   {
     id: 'obsidian',
     name: 'Obsidian Emerald',
     subtitle: 'Carbon Slate · Emerald Neon',
     swatchPrimary: '#10b981',
-    swatchBg: '#050a09',
+    swatchBg: '#040a08',
     badgeText: 'text-emerald-400',
   },
   {
     id: 'royal',
     name: 'Royal Amethyst',
-    subtitle: 'Velvet Noir · Violet Glow',
+    subtitle: 'Velvet Noir · Orchid Glow',
     swatchPrimary: '#a855f7',
-    swatchBg: '#080510',
+    swatchBg: '#080512',
     badgeText: 'text-purple-400',
   },
   {
@@ -47,7 +50,7 @@ export const PREMIUM_THEMES: ThemeMeta[] = [
     name: 'Sovereign Gold',
     subtitle: 'Matte Onyx · 24K Amber',
     swatchPrimary: '#f59e0b',
-    swatchBg: '#090806',
+    swatchBg: '#090805',
     badgeText: 'text-amber-400',
   },
   {
@@ -55,7 +58,7 @@ export const PREMIUM_THEMES: ThemeMeta[] = [
     name: 'Crimson Stealth',
     subtitle: 'Obsidian Ash · Ruby Flare',
     swatchPrimary: '#f43f5e',
-    swatchBg: '#0b0608',
+    swatchBg: '#0b0507',
     badgeText: 'text-rose-400',
   },
   {
@@ -63,7 +66,7 @@ export const PREMIUM_THEMES: ThemeMeta[] = [
     name: 'Abyssal Cyan',
     subtitle: 'Arctic Trench · Aqua Pulse',
     swatchPrimary: '#06b6d4',
-    swatchBg: '#040b10',
+    swatchBg: '#040a10',
     badgeText: 'text-cyan-400',
   },
 ];
@@ -79,13 +82,24 @@ const THEME_CLASSES: Record<ThemeMode, string | null> = {
 
 interface ThemeContextType {
   theme: ThemeMode;
+  displayMode: DisplayMode;
+  resolvedDisplayMode: 'dark' | 'light';
   toggleTheme: () => void;
   setTheme: (t: ThemeMode) => void;
+  setDisplayMode: (m: DisplayMode) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 const VALID_MODES: ThemeMode[] = ['midnight', 'obsidian', 'royal', 'gold', 'crimson', 'oceanic'];
+
+const resolveMode = (mode: DisplayMode): 'dark' | 'light' => {
+  if (mode === 'light') return 'light';
+  if (mode === 'system' && typeof window !== 'undefined') {
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  return 'dark';
+};
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<ThemeMode>(() => {
@@ -97,12 +111,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return 'midnight';
   });
 
+  const [displayMode, setDisplayModeState] = useState<DisplayMode>(() => {
+    return db.getUserPreferences().themeMode || 'dark';
+  });
+
+  const [resolvedDisplayMode, setResolvedDisplayMode] = useState<'dark' | 'light'>(() =>
+    resolveMode(db.getUserPreferences().themeMode || 'dark')
+  );
+
   useEffect(() => {
     const root = document.documentElement;
-    // Always keep .dark active so zero white glare appears
-    root.classList.add('dark');
-
-    // Remove all previous custom theme classes before applying active one
     Object.values(THEME_CLASSES).forEach(cls => {
       if (cls) root.classList.remove(cls);
     });
@@ -111,9 +129,40 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (activeCls) {
       root.classList.add(activeCls);
     }
-
+    root.dataset.theme = theme;
     localStorage.setItem('oe_theme_mode', theme);
+    window.dispatchEvent(new CustomEvent('oe-theme-changed'));
   }, [theme]);
+
+  useEffect(() => {
+    const apply = () => {
+      const resolved = resolveMode(displayMode);
+      setResolvedDisplayMode(resolved);
+      const root = document.documentElement;
+      root.classList.toggle('dark', resolved === 'dark');
+      root.classList.toggle('oe-light', resolved === 'light');
+      root.dataset.colorMode = resolved;
+      window.dispatchEvent(new CustomEvent('oe-theme-changed'));
+    };
+
+    apply();
+
+    const mql = window.matchMedia('(prefers-color-scheme: light)');
+    const onMediaChange = () => {
+      if (displayMode === 'system') apply();
+    };
+    const onPrefsChanged = () => {
+      const latest = db.getUserPreferences().themeMode || 'dark';
+      setDisplayModeState(prev => (prev === latest ? prev : latest));
+    };
+
+    mql.addEventListener('change', onMediaChange);
+    window.addEventListener('oe-prefs-changed', onPrefsChanged);
+    return () => {
+      mql.removeEventListener('change', onMediaChange);
+      window.removeEventListener('oe-prefs-changed', onPrefsChanged);
+    };
+  }, [displayMode]);
 
   const toggleTheme = () => {
     setThemeState(prev => {
@@ -126,8 +175,15 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setThemeState(t);
   };
 
+  const setDisplayMode = (m: DisplayMode) => {
+    setDisplayModeState(m);
+    db.updateUserPreferences({ themeMode: m });
+  };
+
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+    <ThemeContext.Provider
+      value={{ theme, displayMode, resolvedDisplayMode, toggleTheme, setTheme, setDisplayMode }}
+    >
       {children}
     </ThemeContext.Provider>
   );

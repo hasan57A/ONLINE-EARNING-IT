@@ -18,9 +18,12 @@ const APP_ROUTE_PREFIXES = [
   '/history',
   '/saved-results',
   '/profile',
+  '/settings',
+  '/announcements',
   '/payment',
   '/support',
   '/admin',
+  '/supabase-export',
 ];
 
 function isKnownAppPath(pathname: string): boolean {

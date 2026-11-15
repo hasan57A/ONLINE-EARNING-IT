@@ -1,4 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
 import {
   User,
   ToolItem,
@@ -18,8 +17,28 @@ import {
   PaymentPackage,
   PaymentGatewaySettings,
   PaymentRequest,
+  SupportChannel,
+  AnnouncementPost,
+  UserPreferences,
 } from '../types';
 import { findCountryGeo } from '../data/countries';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { supabaseSync } from './supabaseSync';
+
+// Helper for cryptographic hashing
+export async function hashPassword(password: string, salt: string): Promise<string> {
+  const enc = new TextEncoder();
+  const data = enc.encode(password + salt + 'oe_salt_pepper_2026');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+export function generateSalt(): string {
+  const arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 // Initial Tools Definition
 const DEFAULT_TOOLS: ToolItem[] = [
@@ -119,6 +138,131 @@ const STORAGE_KEYS = {
   ADMIN_INITIALIZED: 'oe_admin_initialized_v2',
   PAYMENT_REQUESTS: 'oe_payment_requests_v2',
   PAYMENT_SETTINGS: 'oe_payment_settings_v2',
+  SUPPORT_CHANNELS: 'oe_support_channels_v2',
+  ANNOUNCEMENTS: 'oe_announcements_v2',
+  USER_PREFERENCES: 'oe_user_preferences_v2',
+};
+
+const DEFAULT_SUPPORT_CHANNELS: SupportChannel[] = [
+  {
+    id: 'ch_tg_1',
+    type: 'telegram',
+    name: 'Official Support',
+    handleOrNumber: '@OnlineEarningIT_Official',
+    isPrimary: true,
+    status: 'active',
+    visibleToUsers: true,
+    order: 1,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'ch_tg_2',
+    type: 'telegram',
+    name: 'Marketing Support',
+    handleOrNumber: '@OEIT_MarketingDesk',
+    isPrimary: false,
+    status: 'active',
+    visibleToUsers: true,
+    order: 2,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'ch_wa_1',
+    type: 'whatsapp',
+    name: 'Support WhatsApp 1',
+    handleOrNumber: '+880 1712-345678',
+    isPrimary: true,
+    status: 'active',
+    visibleToUsers: true,
+    order: 1,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'ch_wa_2',
+    type: 'whatsapp',
+    name: 'Support WhatsApp 2',
+    handleOrNumber: '+880 1812-345679',
+    isPrimary: false,
+    status: 'active',
+    visibleToUsers: true,
+    order: 2,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'ch_wa_3',
+    type: 'whatsapp',
+    name: 'Sales WhatsApp',
+    handleOrNumber: '+880 1912-345680',
+    isPrimary: false,
+    status: 'active',
+    visibleToUsers: true,
+    order: 3,
+    createdAt: new Date().toISOString(),
+  },
+];
+
+const DEFAULT_ANNOUNCEMENTS: AnnouncementPost[] = [
+  {
+    id: 'ann_1',
+    title: 'New Feature: Multi-Device UA Forge & Batch Exports',
+    message: 'Generate realistic User Agents across iPhone, iPad, Android, Windows, and macOS with instant TXT/CSV export and in-app webview versioning.',
+    type: 'Update',
+    audience: 'All Users',
+    status: 'Published',
+    recipientsCount: 0,
+    thumbnailVariant: 'tool',
+    createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
+  },
+  {
+    id: 'ann_2',
+    title: 'Special Offer: 20% Bonus Credits on Pro & Agency Plans',
+    message: 'Upgrade or top up your credit package this week to unlock priority pool allocation and bonus campaign credits.',
+    type: 'Announcement',
+    audience: 'All Users',
+    status: 'Published',
+    recipientsCount: 0,
+    thumbnailVariant: 'bonus',
+    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+  },
+  {
+    id: 'ann_3',
+    title: 'Global Phone Number & GEO Lead Pool Refreshed',
+    message: 'Fresh US, UK, CA, DE, BD, and AU phone numbers and formatted lead datasets have been added to the synchronized pools.',
+    type: 'Notice',
+    audience: 'Premium Users',
+    status: 'Published',
+    recipientsCount: 0,
+    thumbnailVariant: 'maintenance',
+    createdAt: new Date(Date.now() - 86400000 * 6).toISOString(),
+  },
+];
+
+const DEFAULT_USER_PREFERENCES: UserPreferences = {
+  language: 'English',
+  timeZone: '(UTC+06:00) Dhaka, Bangladesh',
+  dateFormat: 'DD MMM YYYY',
+  themeMode: 'dark',
+  rgbEffects: true,
+  animations: true,
+  sidebarStyle: 'full',
+  fontStyle: 'Plus Jakarta Sans',
+  soundEnabled: true,
+  buttonClickSound: true,
+  generateSound: true,
+  copySound: true,
+  notificationSound: true,
+  soundVolume: 30,
+  emailNotifications: true,
+  toolUpdatesNotif: true,
+  announcementsNotif: true,
+  securityAlertsNotif: true,
+  marketingEmailsNotif: false,
+  defaultQuantity: 20,
+  defaultCountry: 'All Countries',
+  defaultOutputFormat: 'TXT',
+  autoCopyAfterGenerate: false,
+  showToolTips: true,
+  loginAlerts: true,
 };
 
 const DEFAULT_PAYMENT_GATEWAYS: PaymentGatewaySettings = {
@@ -177,166 +321,94 @@ const DEFAULT_PAYMENT_PACKAGES: PaymentPackage[] = [
   },
 ];
 
-// ---------------------------------------------------------------------
-// Supabase connection (these two values are PUBLIC by design; the real
-// protection is the Row Level Security rules in supabase_schema.sql)
-// ---------------------------------------------------------------------
-const SUPABASE_URL: string =
-  (import.meta as any).env?.VITE_SUPABASE_URL || 'https://eqmfcgudxhnysxgbveax.supabase.co';
-const SUPABASE_KEY: string =
-  (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 'sb_publishable_XV3oVHbuYWyDTfkPzSaspA_00ldMqRh';
-
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-const toCamel = (s: string): string => s.replace(/_([a-z])/g, (_m, c: string) => c.toUpperCase());
-
-function showBanner(message: string) {
-  try {
-    if (typeof document === 'undefined') return;
-    const el = document.createElement('div');
-    el.textContent = message;
-    el.style.cssText =
-      'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:99999;max-width:90vw;' +
-      'background:#b91c1c;color:#fff;padding:10px 16px;border-radius:10px;font:14px sans-serif;' +
-      'box-shadow:0 4px 16px rgba(0,0,0,.35)';
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 9000);
-  } catch {
-    /* ignore */
-  }
-}
-
-interface TableCfg {
-  table: string;
-  kind: 'list' | 'single';
-  cols: string[];
-  order: { col: string; asc: boolean };
-  public?: boolean; // readable without logging in
-  pool?: boolean; // generator pools that users "claim" items from
-  noInsert?: boolean;
-  noDelete?: boolean;
-  sort?: (a: any, b: any) => number;
-}
-
-const TABLES: Record<string, TableCfg> = {
-  [STORAGE_KEYS.USERS]: {
-    table: 'profiles', kind: 'list', noInsert: true, noDelete: true,
-    cols: ['id', 'full_name', 'mobile', 'gmail', 'role', 'status', 'plan', 'plan_status', 'credits', 'plan_updated_at', 'created_at', 'updated_at'],
-    order: { col: 'created_at', asc: true },
-  },
-  [STORAGE_KEYS.TOOLS]: {
-    table: 'tools', kind: 'list', public: true,
-    cols: ['id', 'name', 'slug', 'description', 'category', 'enabled', 'icon_name'],
-    order: { col: 'id', asc: true },
-    sort: (a, b) => {
-      const ia = DEFAULT_TOOLS.findIndex(t => t.id === a.id);
-      const ib = DEFAULT_TOOLS.findIndex(t => t.id === b.id);
-      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
-    },
-  },
-  [STORAGE_KEYS.CPA_NETWORKS]: {
-    table: 'cpa_networks', kind: 'list', public: true,
-    cols: ['id', 'name', 'type', 'min_payment', 'description', 'join_url'],
-    order: { col: 'id', asc: true },
-  },
-  [STORAGE_KEYS.PROXY_SITES]: {
-    table: 'proxy_sites', kind: 'list', public: true,
-    cols: ['id', 'name', 'validity', 'traffic', 'price', 'buy_url'],
-    order: { col: 'id', asc: true },
-  },
-  [STORAGE_KEYS.ANTIDETECT_BROWSERS]: {
-    table: 'antidetect_browsers', kind: 'list', public: true,
-    cols: ['id', 'name', 'description', 'download_url'],
-    order: { col: 'id', asc: true },
-  },
-  [STORAGE_KEYS.WEBSITE_CONTENT]: {
-    table: 'website_content', kind: 'single', public: true, cols: [],
-    order: { col: 'id', asc: true },
-  },
-  [STORAGE_KEYS.PAYMENT_SETTINGS]: {
-    table: 'payment_settings', kind: 'single', cols: [],
-    order: { col: 'id', asc: true },
-  },
-  [STORAGE_KEYS.UA_POOL]: {
-    table: 'user_agents', kind: 'list', pool: true,
-    cols: ['id', 'device', 'browser', 'in_app_browser', 'country', 'user_agent_string', 'used', 'used_by', 'used_at', 'created_at'],
-    order: { col: 'created_at', asc: true },
-  },
-  [STORAGE_KEYS.LEADS_POOL]: {
-    table: 'leads', kind: 'list', pool: true,
-    cols: ['id', 'full_name', 'gender', 'gmail', 'phone_number', 'country', 'used', 'used_by', 'used_at', 'created_at'],
-    order: { col: 'created_at', asc: true },
-  },
-  [STORAGE_KEYS.NUMBERS_POOL]: {
-    table: 'numbers', kind: 'list', pool: true,
-    cols: ['id', 'country', 'phone_number', 'used', 'used_by', 'used_at', 'created_at'],
-    order: { col: 'created_at', asc: true },
-  },
-  [STORAGE_KEYS.MAILS_POOL]: {
-    table: 'mails', kind: 'list', pool: true,
-    cols: ['id', 'country', 'email', 'used', 'used_by', 'used_at', 'created_at'],
-    order: { col: 'created_at', asc: true },
-  },
-  [STORAGE_KEYS.USAGE_HISTORY]: {
-    table: 'usage_history', kind: 'list',
-    cols: ['id', 'user_id', 'tool_slug', 'tool_name', 'date', 'time', 'result_count', 'status', 'summary'],
-    order: { col: 'id', asc: false },
-  },
-  [STORAGE_KEYS.SAVED_RESULTS]: {
-    table: 'saved_results', kind: 'list',
-    cols: ['id', 'user_id', 'tool_slug', 'tool_name', 'title', 'results_text', 'count', 'saved_date'],
-    order: { col: 'id', asc: false },
-  },
-  [STORAGE_KEYS.SUPPORT_TICKETS]: {
-    table: 'support_tickets', kind: 'list',
-    cols: ['id', 'user_id', 'user_name', 'user_email', 'subject', 'status', 'messages', 'created_at', 'updated_at'],
-    order: { col: 'created_at', asc: false },
-  },
-  [STORAGE_KEYS.PAYMENT_REQUESTS]: {
-    table: 'payment_requests', kind: 'list',
-    cols: ['id', 'user_id', 'user_name', 'user_email', 'package_id', 'package_name', 'package_credits', 'method', 'currency', 'amount', 'sender_account', 'transaction_id', 'note', 'status', 'admin_note', 'reviewed_by', 'reviewed_at', 'created_at'],
-    order: { col: 'created_at', asc: false },
-  },
-};
-
 class DatabaseService {
   private listeners: Set<() => void> = new Set();
-  // In-memory mirror of the Supabase database. Values are JSON strings so every
-  // read returns a fresh copy (same behaviour the old localStorage version had).
-  private store: Record<string, string> = {};
-  // What the server is known to hold: key -> (row id -> JSON string of row)
-  private synced: Record<string, Map<string, string>> = {};
-  private syncedSingle: Record<string, string> = {};
-  private queue: Promise<void> = Promise.resolve();
-  private pending = 0;
-  private hydrating: Promise<void> | null = null;
-  public ready: Promise<void>;
+  private initPromise: Promise<void>;
 
   constructor() {
-    this.ready = Promise.race([
-      this.hydrate().catch(e => console.error('Initial data load failed:', e)),
-      new Promise<void>(res => setTimeout(res, 15000)),
-    ]);
+    this.initPromise = this.initDefaults();
+    this.initSupabaseSync();
+  }
 
-    supabase.auth.onAuthStateChange((event: string) => {
-      if (event === 'SIGNED_OUT' && this.getCurrentUser()) {
-        setTimeout(() => {
-          this.hydrate().catch(() => undefined);
-        }, 0);
-      }
+  private initSupabaseSync() {
+    supabaseSync.registerCallbacks({
+      onTools: tools => {
+        if (tools.length > 0) this.setItem(STORAGE_KEYS.TOOLS, tools);
+      },
+      onWebsiteContent: content => {
+        this.setItem(STORAGE_KEYS.WEBSITE_CONTENT, content);
+      },
+      onPaymentGateways: settings => {
+        this.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, settings);
+      },
+      onCpaNetworks: items => {
+        this.setItem(STORAGE_KEYS.CPA_NETWORKS, items);
+      },
+      onProxySites: items => {
+        this.setItem(STORAGE_KEYS.PROXY_SITES, items);
+      },
+      onAntidetectBrowsers: items => {
+        this.setItem(STORAGE_KEYS.ANTIDETECT_BROWSERS, items);
+      },
+      onUsers: (incomingUsers, replaceAll) => {
+        if (replaceAll) {
+          // Merge local passwordHash/salt if present while trusting Supabase roles/status/plan
+          const localMap = new Map(this.getUsers().map(u => [u.id, u]));
+          const merged = incomingUsers.map(u => {
+            const local = localMap.get(u.id);
+            return local ? { ...u, passwordHash: local.passwordHash, salt: local.salt } : u;
+          });
+          this.setItem(STORAGE_KEYS.USERS, merged);
+        } else if (incomingUsers.length > 0) {
+          const all = this.getUsers();
+          incomingUsers.forEach(u => {
+            const idx = all.findIndex(x => x.id === u.id);
+            if (idx !== -1) {
+              all[idx] = { ...all[idx], ...u, passwordHash: all[idx].passwordHash, salt: all[idx].salt };
+            } else {
+              all.push(u);
+            }
+          });
+          this.setItem(STORAGE_KEYS.USERS, all);
+        }
+        const cur = this.getCurrentUser();
+        if (cur) {
+          const refreshed = incomingUsers.find(u => u.id === cur.id);
+          if (refreshed) {
+            this.setItem(STORAGE_KEYS.CURRENT_USER, { ...cur, ...refreshed, passwordHash: cur.passwordHash, salt: cur.salt });
+          }
+        }
+      },
+      onUaPool: items => {
+        this.setItem(STORAGE_KEYS.UA_POOL, items);
+      },
+      onLeadsPool: items => {
+        this.setItem(STORAGE_KEYS.LEADS_POOL, items);
+      },
+      onNumbersPool: items => {
+        this.setItem(STORAGE_KEYS.NUMBERS_POOL, items);
+      },
+      onMailsPool: items => {
+        this.setItem(STORAGE_KEYS.MAILS_POOL, items);
+      },
+      onPaymentRequests: items => {
+        this.setItem(STORAGE_KEYS.PAYMENT_REQUESTS, items);
+      },
+      onUsageHistory: items => {
+        this.setItem(STORAGE_KEYS.USAGE_HISTORY, items);
+      },
+      onSavedResults: items => {
+        this.setItem(STORAGE_KEYS.SAVED_RESULTS, items);
+      },
+      onSupportTickets: items => {
+        this.setItem(STORAGE_KEYS.SUPPORT_TICKETS, items);
+      },
     });
+    supabaseSync.startPublicListeners();
+  }
 
-    // Keep data fresh when other people (e.g. users paying, admin approving) change things.
-    setInterval(() => {
-      if (typeof document !== 'undefined' && document.hidden) return;
-      if (this.pending > 0) return;
-      this.hydrate().catch(() => undefined);
-    }, 30000);
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && this.pending === 0) this.hydrate().catch(() => undefined);
-      });
-    }
+  public isCloudConnected(): boolean {
+    return Boolean(isSupabaseConfigured && supabaseSync.isConnected());
   }
 
   public subscribe(cb: () => void): () => void {
@@ -352,8 +424,8 @@ class DatabaseService {
 
   private getItem<T>(key: string, fallback: T): T {
     try {
-      const data = this.store[key];
-      return data !== undefined ? JSON.parse(data) : fallback;
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : fallback;
     } catch {
       return fallback;
     }
@@ -361,347 +433,262 @@ class DatabaseService {
 
   private setItem<T>(key: string, value: T): void {
     try {
-      this.store[key] = JSON.stringify(value);
-      const cfg = TABLES[key];
-      if (cfg) this.scheduleSync(key, cfg, value);
+      localStorage.setItem(key, JSON.stringify(value));
       this.notify();
     } catch (e) {
       console.error('Storage write error:', e);
     }
   }
 
-  // ------------------------------------------------------------------
-  // Loading data from Supabase
-  // ------------------------------------------------------------------
-  public hydrate(): Promise<void> {
-    const run = () => this.doHydrate();
-    const p = (this.hydrating ?? Promise.resolve()).then(run, run);
-    this.hydrating = p;
-    const clear = () => {
-      if (this.hydrating === p) this.hydrating = null;
-    };
-    p.then(clear, clear);
-    return p;
-  }
+  // Initialize essential schema
+  private async initDefaults() {
+    if (!localStorage.getItem(STORAGE_KEYS.TOOLS)) {
+      this.setItem(STORAGE_KEYS.TOOLS, DEFAULT_TOOLS);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.WEBSITE_CONTENT)) {
+      this.setItem(STORAGE_KEYS.WEBSITE_CONTENT, DEFAULT_WEBSITE_CONTENT);
+    }
+    // Per requirements: "All public resource cards and database sections should remain empty until the admin adds information."
+    if (!localStorage.getItem(STORAGE_KEYS.CPA_NETWORKS)) {
+      this.setItem(STORAGE_KEYS.CPA_NETWORKS, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.PROXY_SITES)) {
+      this.setItem(STORAGE_KEYS.PROXY_SITES, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.ANTIDETECT_BROWSERS)) {
+      this.setItem(STORAGE_KEYS.ANTIDETECT_BROWSERS, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.UA_POOL)) {
+      this.setItem(STORAGE_KEYS.UA_POOL, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.LEADS_POOL)) {
+      this.setItem(STORAGE_KEYS.LEADS_POOL, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.NUMBERS_POOL)) {
+      this.setItem(STORAGE_KEYS.NUMBERS_POOL, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.MAILS_POOL)) {
+      this.setItem(STORAGE_KEYS.MAILS_POOL, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.PAYMENT_SETTINGS)) {
+      this.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, DEFAULT_PAYMENT_GATEWAYS);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.PAYMENT_REQUESTS)) {
+      this.setItem(STORAGE_KEYS.PAYMENT_REQUESTS, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.SUPPORT_CHANNELS)) {
+      this.setItem(STORAGE_KEYS.SUPPORT_CHANNELS, DEFAULT_SUPPORT_CHANNELS);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS)) {
+      this.setItem(STORAGE_KEYS.ANNOUNCEMENTS, DEFAULT_ANNOUNCEMENTS);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.USER_PREFERENCES)) {
+      this.setItem(STORAGE_KEYS.USER_PREFERENCES, DEFAULT_USER_PREFERENCES);
+    }
+    this.applyUserPreferencesToDom(this.getUserPreferences());
 
-  private async doHydrate(): Promise<void> {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const session = sessionData.session;
-    let changed = false;
+    const existingUsers = this.getItem<User[]>(STORAGE_KEYS.USERS, []);
+    let usersUpdated = false;
 
-    for (const [key, cfg] of Object.entries(TABLES)) {
-      if (!session && !cfg.public) {
-        const empty = cfg.kind === 'list' ? '[]' : undefined;
-        if (this.store[key] !== empty) {
-          if (empty === undefined) delete this.store[key];
-          else this.store[key] = empty;
-          changed = true;
-        }
-        this.synced[key] = new Map();
-        continue;
-      }
-      const result = await this.fetchTable(cfg);
-      if (result === null) continue; // keep what we had on error
-      if (cfg.kind === 'list') {
-        const rows = result as any[];
-        const json = JSON.stringify(rows);
-        const map = new Map<string, string>();
-        rows.forEach(r => map.set(String(r.id), JSON.stringify(r)));
-        this.synced[key] = map;
-        if (this.store[key] !== json) {
-          this.store[key] = json;
-          changed = true;
-        }
-      } else {
-        const obj = result as any;
-        if (obj === undefined) continue;
-        const json = JSON.stringify(obj);
-        this.syncedSingle[key] = json;
-        if (this.store[key] !== json) {
-          this.store[key] = json;
-          changed = true;
-        }
-      }
+    if (!localStorage.getItem(STORAGE_KEYS.USERS) || existingUsers.length === 0) {
+      const adminSalt = generateSalt();
+      const adminHash = await hashPassword('Admin@OEIT2026!', adminSalt);
+      const defaultAdmin: User = {
+        id: 'admin_master_001',
+        fullName: 'Master Administrator',
+        mobile: '+1 (555) 019-2026',
+        gmail: 'admin@onlineearningit.com',
+        passwordHash: adminHash,
+        salt: adminSalt,
+        role: 'admin',
+        status: 'active',
+        createdAt: new Date().toISOString(),
+      };
+
+      const ownerSalt = generateSalt();
+      const ownerHash = await hashPassword('Admin@OEIT2026!', ownerSalt);
+      const ownerAdmin: User = {
+        id: 'admin_owner_002',
+        fullName: 'Platform Owner',
+        mobile: '+1 (555) 019-2834',
+        gmail: 'mybusinessforunitedstates@gmail.com',
+        passwordHash: ownerHash,
+        salt: ownerSalt,
+        role: 'admin',
+        status: 'active',
+        createdAt: new Date().toISOString(),
+      };
+
+      existingUsers.push(defaultAdmin, ownerAdmin);
+      usersUpdated = true;
     }
 
-    // Work out who is logged in from their profile row
-    let current: User | null = null;
-    if (session) {
-      const users = this.getItem<User[]>(STORAGE_KEYS.USERS, []);
-      current = users.find(u => u.id === session.user.id) || null;
-      if (current && current.status === 'deactivated') {
-        await supabase.auth.signOut();
-        current = null;
-      }
-    }
-    const currentJson = JSON.stringify(current);
-    if (this.store[STORAGE_KEYS.CURRENT_USER] !== currentJson) {
-      this.store[STORAGE_KEYS.CURRENT_USER] = currentJson;
-      changed = true;
-    }
+    // Ensure the primary owner admin account (arittechofficial@gmail.com) is always provisioned & active
+    const arittechEmail = 'arittechofficial@gmail.com';
+    const arittechIdx = existingUsers.findIndex(u => u.gmail.toLowerCase() === arittechEmail);
 
-    if (changed) this.notify();
-  }
-
-  private async fetchTable(cfg: TableCfg): Promise<any[] | any | null> {
-    try {
-      if (cfg.kind === 'single') {
-        const { data, error } = await supabase.from(cfg.table).select('data').eq('id', 1).maybeSingle();
-        if (error) throw error;
-        return data ? data.data : undefined;
-      }
-      const rows: any[] = [];
-      const PAGE = 1000;
-      for (let from = 0; ; from += PAGE) {
-        const q = supabase
-          .from(cfg.table)
-          .select(cfg.cols.join(','))
-          .order(cfg.order.col, { ascending: cfg.order.asc })
-          .order('id', { ascending: true })
-          .range(from, from + PAGE - 1);
-        const { data, error } = await q;
-        if (error) throw error;
-        const got = (data as any[]) || [];
-        rows.push(...got);
-        if (got.length < PAGE) break;
-      }
-      let mapped = rows.map(r => this.rowIn(r, cfg));
-      if (cfg.sort) mapped = mapped.sort(cfg.sort);
-      return mapped;
-    } catch (e) {
-      console.error(`Could not load "${cfg.table}":`, e);
-      return null;
-    }
-  }
-
-  private rowIn(row: any, cfg: TableCfg): any {
-    const out: any = {};
-    for (const [k, v] of Object.entries(row)) {
-      if (v === null || v === undefined) continue;
-      out[toCamel(k)] = v;
-    }
-    if (cfg.table === 'profiles') {
-      out.passwordHash = '';
-      out.salt = '';
-    }
-    return out;
-  }
-
-  private rowOutInsert(item: any, cfg: TableCfg): any {
-    const out: any = {};
-    for (const col of cfg.cols) {
-      const v = item[toCamel(col)];
-      if (v !== undefined && v !== null) out[col] = v;
-    }
-    return out;
-  }
-
-  private rowOutUpdate(prev: any, item: any, cfg: TableCfg): any {
-    const out: any = {};
-    for (const col of cfg.cols) {
-      if (col === 'id') continue;
-      const key = toCamel(col);
-      const a = JSON.stringify(prev[key]);
-      const b = JSON.stringify(item[key]);
-      if (a !== b) out[col] = item[key] === undefined ? null : item[key];
-    }
-    return out;
-  }
-
-  // ------------------------------------------------------------------
-  // Saving data to Supabase
-  // ------------------------------------------------------------------
-  private enqueue(fn: () => Promise<void>) {
-    this.pending++;
-    this.queue = this.queue
-      .then(fn)
-      .catch(e => this.syncError(e))
-      .finally(() => {
-        this.pending--;
+    if (arittechIdx === -1) {
+      const arittechSalt = generateSalt();
+      const arittechHash = await hashPassword('Arifinazad99@#@', arittechSalt);
+      existingUsers.push({
+        id: 'admin_arittech_003',
+        fullName: 'Arittech Official',
+        mobile: '+8801700000000',
+        gmail: arittechEmail,
+        passwordHash: arittechHash,
+        salt: arittechSalt,
+        role: 'admin',
+        status: 'active',
+        createdAt: new Date().toISOString(),
       });
-  }
-
-  private syncError(e: any) {
-    console.error('Database save error:', e);
-    const msg = (e && (e.message || e.error_description)) || 'Unknown error';
-    showBanner('Could not save to the database: ' + msg);
-    this.hydrate().catch(() => undefined);
-  }
-
-  private scheduleSync(key: string, cfg: TableCfg, value: any) {
-    if (cfg.kind === 'single') {
-      const json = JSON.stringify(value);
-      if (this.syncedSingle[key] === json) return;
-      this.syncedSingle[key] = json;
-      this.enqueue(async () => {
-        const { error } = await supabase.from(cfg.table).upsert({ id: 1, data: value });
-        if (error) throw error;
-      });
-      return;
+      usersUpdated = true;
+    } else if (existingUsers[arittechIdx].role !== 'admin' || existingUsers[arittechIdx].status !== 'active') {
+      const arittechSalt = generateSalt();
+      const arittechHash = await hashPassword('Arifinazad99@#@', arittechSalt);
+      existingUsers[arittechIdx].salt = arittechSalt;
+      existingUsers[arittechIdx].passwordHash = arittechHash;
+      existingUsers[arittechIdx].role = 'admin';
+      existingUsers[arittechIdx].status = 'active';
+      usersUpdated = true;
     }
 
-    const synced = this.synced[key] || (this.synced[key] = new Map());
-    const list = value as any[];
-    const seen = new Set<string>();
-    const inserts: any[] = [];
-    const updates: { id: string; payload: any }[] = [];
-
-    for (const item of list) {
-      const id = String(item.id);
-      seen.add(id);
-      const json = JSON.stringify(item);
-      const prev = synced.get(id);
-      if (prev === undefined) {
-        inserts.push(item);
-        synced.set(id, json);
-      } else if (prev !== json) {
-        const payload = this.rowOutUpdate(JSON.parse(prev), item, cfg);
-        synced.set(id, json);
-        if (Object.keys(payload).length > 0) updates.push({ id, payload });
-      }
+    if (usersUpdated) {
+      this.setItem(STORAGE_KEYS.USERS, existingUsers);
     }
-    const deletes: string[] = [];
-    for (const id of Array.from(synced.keys())) {
-      if (!seen.has(id)) {
-        deletes.push(id);
-        synced.delete(id);
-      }
+
+    // Keep current logged-in session role synced with ADMIN_EMAILS whitelist
+    const current = this.getItem<User | null>(STORAGE_KEYS.CURRENT_USER, null);
+    if (current && this.ADMIN_EMAILS.includes(current.gmail.toLowerCase()) && current.role !== 'admin') {
+      this.setItem(STORAGE_KEYS.CURRENT_USER, { ...current, role: 'admin', status: 'active' });
     }
-    if (!inserts.length && !updates.length && !deletes.length) return;
-
-    this.enqueue(async () => {
-      // 1) inserts
-      if (!cfg.noInsert && inserts.length) {
-        const rows = inserts.map(i => this.rowOutInsert(i, cfg));
-        for (let i = 0; i < rows.length; i += 400) {
-          const { error } = await supabase.from(cfg.table).insert(rows.slice(i, i + 400));
-          if (error) throw error;
-        }
-      }
-
-      // 2) updates
-      if (updates.length) {
-        if (cfg.pool) {
-          // group identical changes so thousands of "used" flags become a few requests
-          const groups = new Map<string, { ids: string[]; payload: any }>();
-          for (const u of updates) {
-            const rest = { ...u.payload };
-            delete rest.used_at;
-            const gk = JSON.stringify(rest);
-            const g = groups.get(gk) || { ids: [], payload: { ...u.payload } };
-            g.ids.push(u.id);
-            groups.set(gk, g);
-          }
-          for (const g of groups.values()) {
-            for (let i = 0; i < g.ids.length; i += 200) {
-              let q = supabase.from(cfg.table).update(g.payload).in('id', g.ids.slice(i, i + 200));
-              if (g.payload.used === true) q = q.eq('used', false);
-              const { error } = await q.select('id');
-              if (error) throw error;
-            }
-          }
-        } else {
-          for (let i = 0; i < updates.length; i += 10) {
-            await Promise.all(
-              updates.slice(i, i + 10).map(async u => {
-                const { data, error } = await supabase
-                  .from(cfg.table)
-                  .update(u.payload)
-                  .eq('id', u.id)
-                  .select('id');
-                if (error) throw error;
-                if (!data || data.length === 0) {
-                  throw new Error('Permission denied or record not found (' + cfg.table + ')');
-                }
-              })
-            );
-          }
-        }
-      }
-
-      // 3) deletes
-      if (!cfg.noDelete && deletes.length) {
-        for (let i = 0; i < deletes.length; i += 200) {
-          const chunk = deletes.slice(i, i + 200);
-          const { data, error } = await supabase.from(cfg.table).delete().in('id', chunk).select('id');
-          if (error) throw error;
-          if (!data || data.length < chunk.length) {
-            throw new Error('Permission denied: some records could not be deleted (' + cfg.table + ')');
-          }
-        }
-      }
-
-      // Pools can be claimed by two people at once: reload so we show the truth.
-      if (cfg.pool && this.pending === 1) await this.hydrate();
-    });
   }
 
-  // ------------------------------------------------------------------
-  // Users & Auth (Supabase Auth)
-  // ------------------------------------------------------------------
+  // Master Admin Whitelist (Strict Access: Only designated site owner accounts have admin privileges)
+  private readonly ADMIN_EMAILS = [
+    'arittechofficial@gmail.com',
+    'mybusinessforunitedstates@gmail.com',
+    'admin@onlineearningit.com',
+  ];
+
+  // --- Users & Auth ---
   public getUsers(): User[] {
     return this.getItem<User[]>(STORAGE_KEYS.USERS, []);
   }
 
   public async registerUser(fullName: string, mobile: string, gmail: string, pass: string): Promise<{ success: boolean; error?: string; user?: User }> {
+    await this.initPromise;
+    const users = this.getUsers();
     const cleanEmail = gmail.trim().toLowerCase();
 
     if (!cleanEmail.endsWith('@gmail.com')) {
       return { success: false, error: 'Registration requires a valid Gmail address (@gmail.com).' };
     }
-    if (pass.length < 8) {
-      return { success: false, error: 'Password must be at least 8 characters.' };
+    if (users.some(u => u.gmail.toLowerCase() === cleanEmail)) {
+      return { success: false, error: 'This Gmail address is already registered. Please sign in.' };
+    }
+    if (pass.length < 6) {
+      return { success: false, error: 'Password must be at least 6 characters.' };
     }
 
-    const { data, error } = await supabase.auth.signUp({
-      email: cleanEmail,
-      password: pass,
-      options: { data: { full_name: fullName.trim(), mobile: mobile.trim() } },
-    });
+    const salt = generateSalt();
+    const passwordHash = await hashPassword(pass, salt);
 
-    if (error) {
-      const m = (error.message || '').toLowerCase();
-      if (m.includes('already registered') || m.includes('already been registered')) {
-        return { success: false, error: 'This Gmail address is already registered. Please sign in.' };
-      }
-      return { success: false, error: error.message || 'Registration failed.' };
-    }
-    if (!data.session) {
-      return {
-        success: false,
-        error: 'Account created. Please confirm your email using the link we sent you, then sign in.',
-      };
-    }
+    // Only the verified owner email gets admin; all regular users strictly get 'user' role
+    const isOwnerAdmin = this.ADMIN_EMAILS.includes(cleanEmail);
 
-    await this.hydrate();
-    const user = this.getCurrentUser();
-    if (!user) {
-      return { success: false, error: 'Account was created but your profile could not be loaded. Please sign in again.' };
-    }
-    return { success: true, user };
+    const newUser: User = {
+      id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      fullName: fullName.trim(),
+      mobile: mobile.trim(),
+      gmail: cleanEmail,
+      passwordHash,
+      salt,
+      role: isOwnerAdmin ? 'admin' : 'user',
+      status: 'active',
+      planStatus: 'none',
+      credits: 0,
+      createdAt: new Date().toISOString(),
+    };
+
+    users.push(newUser);
+    this.setItem(STORAGE_KEYS.USERS, users);
+    return { success: true, user: newUser };
   }
 
   public async authenticate(gmail: string, pass: string): Promise<{ success: boolean; error?: string; user?: User }> {
+    await this.initPromise;
+    const users = this.getUsers();
     const cleanEmail = gmail.trim().toLowerCase();
-    const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password: pass });
-    if (error) {
-      const m = (error.message || '').toLowerCase();
-      if (m.includes('not confirmed')) {
-        return { success: false, error: 'Please confirm your email address first, then sign in.' };
-      }
-      return { success: false, error: 'Incorrect Gmail or password. Please try again.' };
+    const user = users.find(u => u.gmail.toLowerCase() === cleanEmail);
+
+    if (!user) {
+      return { success: false, error: 'No account found with this Gmail address.' };
     }
 
-    await this.hydrate();
-    const user = this.getCurrentUser();
-    if (!user) {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        return { success: false, error: 'Your account has been deactivated by the administrator. Please contact support.' };
-      }
-      return { success: false, error: 'Could not load your profile. Please try again.' };
+    if (user.status === 'deactivated') {
+      return { success: false, error: 'Your account has been deactivated by the administrator. Please contact support.' };
     }
+
+    const computedHash = await hashPassword(pass, user.salt);
+    if (computedHash !== user.passwordHash) {
+      return { success: false, error: 'Incorrect password. Please try again.' };
+    }
+
+    // Strict security guarantee: Only whitelisted owner email addresses can hold admin privileges
+    if (this.ADMIN_EMAILS.includes(cleanEmail)) {
+      user.role = 'admin';
+    } else {
+      user.role = 'user';
+    }
+
+    this.setCurrentUser(user);
     return { success: true, user };
+  }
+
+  public async authenticateWithSupabaseUser(
+    uid: string,
+    email: string,
+    displayName: string
+  ): Promise<{ success: boolean; user?: User; error?: string }> {
+    await this.initPromise;
+    const syncedUser = await supabaseSync.syncSupabaseAuthenticatedUser(
+      uid,
+      email,
+      displayName,
+      this.ADMIN_EMAILS
+    );
+
+    if (syncedUser.status === 'deactivated') {
+      return {
+        success: false,
+        error: 'Your account has been deactivated by the administrator. Please contact support.',
+      };
+    }
+
+    const users = this.getUsers();
+    const idx = users.findIndex(u => u.id === syncedUser.id);
+    if (idx !== -1) {
+      users[idx] = { ...users[idx], ...syncedUser };
+    } else {
+      users.push(syncedUser);
+    }
+    this.setItem(STORAGE_KEYS.USERS, users);
+    this.setCurrentUser(syncedUser);
+
+    const isAdmin = syncedUser.role === 'admin';
+    supabaseSync.startUserListeners(uid, isAdmin);
+    if (isAdmin) {
+      await supabaseSync.bootstrapAdminDefaults({
+        tools: this.getTools(),
+        websiteContent: this.getWebsiteContent(),
+        paymentGateways: this.getPaymentGateways(),
+      });
+    }
+    return { success: true, user: syncedUser };
+  }
+
+  public stopCloudUserSync(): void {
+    supabaseSync.stopUserListeners();
   }
 
   public getCurrentUser(): User | null {
@@ -709,24 +696,7 @@ class DatabaseService {
   }
 
   public setCurrentUser(user: User | null): void {
-    if (user === null) {
-      this.store[STORAGE_KEYS.CURRENT_USER] = 'null';
-      // forget private data immediately, then end the Supabase session
-      for (const [key, cfg] of Object.entries(TABLES)) {
-        if (!cfg.public) {
-          if (cfg.kind === 'list') this.store[key] = '[]';
-          else delete this.store[key];
-          this.synced[key] = new Map();
-        }
-      }
-      this.notify();
-      supabase.auth.signOut().finally(() => {
-        this.hydrate().catch(() => undefined);
-      });
-      return;
-    }
-    this.store[STORAGE_KEYS.CURRENT_USER] = JSON.stringify(user);
-    this.notify();
+    this.setItem(STORAGE_KEYS.CURRENT_USER, user);
   }
 
   public getUserById(userId: string): User | undefined {
@@ -744,25 +714,44 @@ class DatabaseService {
       if (current && current.id === userId) {
         this.setCurrentUser(users[idx]);
       }
+      void supabaseSync.syncUserStatus(userId, status);
     }
   }
 
-  public async updateUserProfile(userId: string, data: { fullName?: string; mobile?: string; newPassword?: string }): Promise<{ success: boolean; error?: string }> {
-    if (data.newPassword) {
-      if (data.newPassword.length < 8) {
-        return { success: false, error: 'Password must be at least 8 characters' };
-      }
-      const { error } = await supabase.auth.updateUser({ password: data.newPassword });
-      if (error) return { success: false, error: error.message };
+  public async updateUserProfile(
+    userId: string,
+    data: {
+      fullName?: string;
+      username?: string;
+      mobile?: string;
+      telegramUsername?: string;
+      twoFactorEnabled?: boolean;
+      newPassword?: string;
     }
-
+  ): Promise<{ success: boolean; error?: string }> {
     const users = this.getUsers();
     const idx = users.findIndex(u => u.id === userId);
-    if (idx === -1) {
-      return data.newPassword ? { success: true } : { success: false, error: 'User not found' };
+    if (idx === -1) return { success: false, error: 'User not found' };
+
+    if (data.fullName !== undefined) users[idx].fullName = data.fullName.trim();
+    if (data.username !== undefined) users[idx].username = data.username.trim().replace(/^@/, '');
+    if (data.mobile !== undefined) users[idx].mobile = data.mobile.trim();
+    if (data.telegramUsername !== undefined) {
+      const cleanTg = data.telegramUsername.trim();
+      users[idx].telegramUsername = cleanTg ? (cleanTg.startsWith('@') ? cleanTg : `@${cleanTg}`) : '';
+      users[idx].telegramVerified = Boolean(cleanTg);
     }
-    if (data.fullName) users[idx].fullName = data.fullName.trim();
-    if (data.mobile) users[idx].mobile = data.mobile.trim();
+    if (data.twoFactorEnabled !== undefined) {
+      users[idx].twoFactorEnabled = data.twoFactorEnabled;
+    }
+    if (data.newPassword) {
+      if (data.newPassword.length < 6) {
+        return { success: false, error: 'Password must be at least 6 characters' };
+      }
+      const newSalt = generateSalt();
+      users[idx].salt = newSalt;
+      users[idx].passwordHash = await hashPassword(data.newPassword, newSalt);
+    }
     users[idx].updatedAt = new Date().toISOString();
     this.setItem(STORAGE_KEYS.USERS, users);
 
@@ -770,6 +759,48 @@ class DatabaseService {
     if (current && current.id === userId) {
       this.setCurrentUser(users[idx]);
     }
+    if (data.fullName !== undefined || data.mobile !== undefined) {
+      void supabaseSync.syncUserProfile(userId, { fullName: data.fullName, mobile: data.mobile });
+    }
+    return { success: true };
+  }
+
+  public adminUpdateUserDetails(
+    userId: string,
+    patch: {
+      fullName?: string;
+      role?: 'user' | 'admin';
+      status?: 'active' | 'deactivated';
+      adminNote?: string;
+    }
+  ): { success: boolean; error?: string } {
+    const users = this.getUsers();
+    const idx = users.findIndex(u => u.id === userId);
+    if (idx === -1) return { success: false, error: 'User not found.' };
+    if (patch.fullName !== undefined) users[idx].fullName = patch.fullName.trim();
+    if (patch.role !== undefined) users[idx].role = patch.role;
+    if (patch.status !== undefined) users[idx].status = patch.status;
+    if (patch.adminNote !== undefined) users[idx].adminNote = patch.adminNote;
+    users[idx].updatedAt = new Date().toISOString();
+    this.setItem(STORAGE_KEYS.USERS, users);
+    const current = this.getCurrentUser();
+    if (current && current.id === userId) {
+      this.setCurrentUser(users[idx]);
+    }
+    if (patch.status !== undefined) {
+      void supabaseSync.syncUserStatus(userId, patch.status);
+    }
+    return { success: true };
+  }
+
+  public adminDeleteUser(userId: string): { success: boolean; error?: string } {
+    const target = this.getUserById(userId);
+    if (!target) return { success: false, error: 'User not found.' };
+    if (this.ADMIN_EMAILS.includes(target.gmail.toLowerCase())) {
+      return { success: false, error: 'Master owner accounts cannot be deleted.' };
+    }
+    const next = this.getUsers().filter(u => u.id !== userId);
+    this.setItem(STORAGE_KEYS.USERS, next);
     return { success: true };
   }
 
@@ -782,39 +813,7 @@ class DatabaseService {
     isAdmin: boolean;
     hasActivePackage: boolean;
     hasUsablePackage: boolean;
-    remainingCredits: number;
     packageCredits?: number;
-    planName?: string;
-    planStatus: 'none' | 'pending' | 'active';
-    reason?: string;
-  } {
-    const base = this.evaluateToolAccess(userId, requiredCredits);
-    const hasUsablePackage = base.isAdmin || (base.planStatus === 'active' && base.remainingCredits > 0);
-
-    let packageCredits: number | undefined;
-    if (!base.isAdmin) {
-      const user = (userId ? this.getUserById(userId) : null) || this.getCurrentUser();
-      const matched = DEFAULT_PAYMENT_PACKAGES.find(p => p.name === base.planName);
-      if (base.planStatus === 'pending' && user) {
-        const pendingReq = this.getPaymentRequests().find(r => r.userId === user.id && r.status === 'pending');
-        const pendingPkg = pendingReq
-          ? DEFAULT_PAYMENT_PACKAGES.find(p => p.id === pendingReq.packageId || p.name === pendingReq.packageName)
-          : undefined;
-        packageCredits = pendingReq?.packageCredits ?? pendingPkg?.credits ?? matched?.credits;
-      } else if (base.planStatus === 'active') {
-        packageCredits = Math.max(matched?.credits ?? 0, base.remainingCredits) || undefined;
-      }
-    }
-    return { ...base, hasUsablePackage, packageCredits };
-  }
-
-  private evaluateToolAccess(
-    userId?: string,
-    requiredCredits: number = 1
-  ): {
-    allowed: boolean;
-    isAdmin: boolean;
-    hasActivePackage: boolean;
     remainingCredits: number;
     planName?: string;
     planStatus: 'none' | 'pending' | 'active';
@@ -826,6 +825,7 @@ class DatabaseService {
         allowed: false,
         isAdmin: false,
         hasActivePackage: false,
+        hasUsablePackage: false,
         remainingCredits: 0,
         planStatus: 'none',
         reason: 'Please sign in to access marketing tools.',
@@ -837,6 +837,7 @@ class DatabaseService {
         allowed: true,
         isAdmin: true,
         hasActivePackage: true,
+        hasUsablePackage: true,
         remainingCredits: 999999,
         planName: 'Admin Unlimited',
         planStatus: 'active',
@@ -845,12 +846,18 @@ class DatabaseService {
 
     const planStatus: 'none' | 'pending' | 'active' = user.planStatus || 'none';
     const remainingCredits = Math.max(0, Math.floor(Number(user.credits ?? 0)));
+    const matchedPkg = DEFAULT_PAYMENT_PACKAGES.find(
+      p => p.name === user.plan || p.id === user.plan
+    );
+    const packageCredits = matchedPkg?.credits;
 
     if (planStatus !== 'active') {
       return {
         allowed: false,
         isAdmin: false,
         hasActivePackage: false,
+        hasUsablePackage: false,
+        packageCredits,
         remainingCredits,
         planName: user.plan,
         planStatus,
@@ -866,6 +873,8 @@ class DatabaseService {
         allowed: false,
         isAdmin: false,
         hasActivePackage: true,
+        hasUsablePackage: false,
+        packageCredits,
         remainingCredits: 0,
         planName: user.plan,
         planStatus,
@@ -878,6 +887,8 @@ class DatabaseService {
         allowed: false,
         isAdmin: false,
         hasActivePackage: true,
+        hasUsablePackage: true,
+        packageCredits,
         remainingCredits,
         planName: user.plan,
         planStatus,
@@ -889,6 +900,8 @@ class DatabaseService {
       allowed: true,
       isAdmin: false,
       hasActivePackage: true,
+      hasUsablePackage: true,
+      packageCredits,
       remainingCredits,
       planName: user.plan,
       planStatus,
@@ -925,17 +938,20 @@ class DatabaseService {
     }
 
     const nextCredits = currentCredits - cleanAmount;
+    const nextUsedCredits = Math.max(0, Math.floor(Number(targetUser.usedCredits ?? 0))) + cleanAmount;
     const nowIso = new Date().toISOString();
 
     if (idx !== -1) {
       users[idx].credits = nextCredits;
+      users[idx].usedCredits = nextUsedCredits;
       users[idx].updatedAt = nowIso;
       this.setItem(STORAGE_KEYS.USERS, users);
     }
     if (current && current.id === userId) {
-      this.setCurrentUser({ ...current, credits: nextCredits, updatedAt: nowIso });
+      this.setCurrentUser({ ...current, credits: nextCredits, usedCredits: nextUsedCredits, updatedAt: nowIso });
     }
 
+    void supabaseSync.syncUserCreditsUpdate(userId, nextCredits);
     return { success: true, remainingCredits: nextCredits };
   }
 
@@ -968,11 +984,15 @@ class DatabaseService {
       this.setCurrentUser(users[idx]);
     }
 
+    void supabaseSync.syncUserCreditsUpdate(userId, cleanCredits, {
+      plan: nextPlan,
+      planStatus: nextPlanStatus,
+    });
 
     return { success: true };
   }
 
-    // --- Tools Management ---
+  // --- Tools Management ---
   public getTools(): ToolItem[] {
     return this.getItem<ToolItem[]>(STORAGE_KEYS.TOOLS, DEFAULT_TOOLS);
   }
@@ -983,6 +1003,7 @@ class DatabaseService {
     if (idx !== -1) {
       tools[idx].enabled = enabled;
       this.setItem(STORAGE_KEYS.TOOLS, tools);
+      void supabaseSync.syncTool(tools[idx]);
     }
   }
 
@@ -1003,6 +1024,7 @@ class DatabaseService {
     };
     pool.push(newEntry);
     this.setItem(STORAGE_KEYS.UA_POOL, pool);
+    void supabaseSync.syncPoolAdd('uaPool', [newEntry]);
   }
 
   public addMultipleUserAgents(entries: Array<Omit<UserAgentEntry, 'id' | 'used' | 'createdAt'>>): void {
@@ -1015,11 +1037,13 @@ class DatabaseService {
       createdAt: new Date().toISOString(),
     }));
     this.setItem(STORAGE_KEYS.UA_POOL, [...pool, ...formatted]);
+    void supabaseSync.syncPoolAdd('uaPool', formatted);
   }
 
   public deleteUserAgent(id: string): void {
     const pool = this.getUserAgents().filter(item => item.id !== id);
     this.setItem(STORAGE_KEYS.UA_POOL, pool);
+    void supabaseSync.syncPoolDelete('uaPool', [id]);
   }
 
   public deleteUserAgentsByFilter(
@@ -1038,12 +1062,14 @@ class DatabaseService {
     });
     const removedCount = pool.length - kept.length;
     this.setItem(STORAGE_KEYS.UA_POOL, kept);
+    void supabaseSync.syncPoolDelete('uaPool', removedIds);
     return removedCount;
   }
 
   public deleteAllUserAgents(): void {
     const allIds = this.getUserAgents().map(u => u.id);
     this.setItem(STORAGE_KEYS.UA_POOL, []);
+    void supabaseSync.syncPoolDelete('uaPool', allIds);
   }
 
   // Consume User Agents (Requirement: "Admin-added data must appear in the appropriate user-facing generator.
@@ -1166,6 +1192,7 @@ class DatabaseService {
 
     if (matching.length > 0) {
       this.setItem(STORAGE_KEYS.UA_POOL, pool);
+      void supabaseSync.syncPoolConsume('uaPool', matching.map(m => m.id));
     }
 
     if (matching.length === 0) {
@@ -1273,6 +1300,12 @@ class DatabaseService {
             } else {
               updated += ` Snapchat/${iv}`;
             }
+          } else if (iab === 'WeChat') {
+            if (/MicroMessenger\/[0-9]+(\.[0-9]+)*/.test(updated)) {
+              updated = updated.replace(/MicroMessenger\/[0-9]+(\.[0-9]+)*/g, `MicroMessenger/${iv}`);
+            } else {
+              updated += ` MicroMessenger/${iv}`;
+            }
           }
         }
       }
@@ -1340,6 +1373,7 @@ class DatabaseService {
     };
     pool.push(newEntry);
     this.setItem(STORAGE_KEYS.LEADS_POOL, pool);
+    void supabaseSync.syncPoolAdd('leadsPool', [newEntry]);
   }
 
   public addMultipleLeads(entries: Array<Omit<LeadEntry, 'id' | 'used' | 'createdAt'>>): void {
@@ -1352,11 +1386,13 @@ class DatabaseService {
       createdAt: new Date().toISOString(),
     }));
     this.setItem(STORAGE_KEYS.LEADS_POOL, [...pool, ...formatted]);
+    void supabaseSync.syncPoolAdd('leadsPool', formatted);
   }
 
   public deleteLead(id: string): void {
     const pool = this.getLeads().filter(item => item.id !== id);
     this.setItem(STORAGE_KEYS.LEADS_POOL, pool);
+    void supabaseSync.syncPoolDelete('leadsPool', [id]);
   }
 
   public deleteUsedLeads(): number {
@@ -1364,12 +1400,14 @@ class DatabaseService {
     const usedIds = pool.filter(l => l.used).map(l => l.id);
     const kept = pool.filter(l => !l.used);
     this.setItem(STORAGE_KEYS.LEADS_POOL, kept);
+    void supabaseSync.syncPoolDelete('leadsPool', usedIds);
     return pool.length - kept.length;
   }
 
   public deleteAllLeads(): void {
     const allIds = this.getLeads().map(l => l.id);
     this.setItem(STORAGE_KEYS.LEADS_POOL, []);
+    void supabaseSync.syncPoolDelete('leadsPool', allIds);
   }
 
   public consumeLeads(
@@ -1453,6 +1491,7 @@ class DatabaseService {
 
     if (matching.length > 0) {
       this.setItem(STORAGE_KEYS.LEADS_POOL, [...matching, ...remaining]);
+      void supabaseSync.syncPoolConsume('leadsPool', matching.map(m => m.id));
     }
 
     if (matching.length === 0) {
@@ -1490,6 +1529,7 @@ class DatabaseService {
     };
     pool.push(newEntry);
     this.setItem(STORAGE_KEYS.NUMBERS_POOL, pool);
+    void supabaseSync.syncPoolAdd('numbersPool', [newEntry]);
   }
 
   public addMultipleNumbers(entries: Array<Omit<NumberEntry, 'id' | 'used' | 'createdAt'>>): void {
@@ -1502,10 +1542,12 @@ class DatabaseService {
       createdAt: new Date().toISOString(),
     }));
     this.setItem(STORAGE_KEYS.NUMBERS_POOL, [...pool, ...formatted]);
+    void supabaseSync.syncPoolAdd('numbersPool', formatted);
   }
 
   public deleteNumber(id: string): void {
     this.setItem(STORAGE_KEYS.NUMBERS_POOL, this.getNumbers().filter(n => n.id !== id));
+    void supabaseSync.syncPoolDelete('numbersPool', [id]);
   }
 
   public deleteUsedNumbers(): number {
@@ -1513,12 +1555,14 @@ class DatabaseService {
     const usedIds = pool.filter(n => n.used).map(n => n.id);
     const kept = pool.filter(n => !n.used);
     this.setItem(STORAGE_KEYS.NUMBERS_POOL, kept);
+    void supabaseSync.syncPoolDelete('numbersPool', usedIds);
     return pool.length - kept.length;
   }
 
   public deleteAllNumbers(): void {
     const allIds = this.getNumbers().map(n => n.id);
     this.setItem(STORAGE_KEYS.NUMBERS_POOL, []);
+    void supabaseSync.syncPoolDelete('numbersPool', allIds);
   }
 
   public consumeNumbers(
@@ -1592,6 +1636,7 @@ class DatabaseService {
 
     if (matching.length > 0) {
       this.setItem(STORAGE_KEYS.NUMBERS_POOL, [...matching, ...remaining]);
+      void supabaseSync.syncPoolConsume('numbersPool', matching.map(m => m.id));
     }
 
     if (matching.length === 0) {
@@ -1623,6 +1668,7 @@ class DatabaseService {
     };
     pool.push(newEntry);
     this.setItem(STORAGE_KEYS.MAILS_POOL, pool);
+    void supabaseSync.syncPoolAdd('mailsPool', [newEntry]);
   }
 
   public addMultipleMails(entries: Array<Omit<MailEntry, 'id' | 'used' | 'createdAt'>>): void {
@@ -1635,10 +1681,12 @@ class DatabaseService {
       createdAt: new Date().toISOString(),
     }));
     this.setItem(STORAGE_KEYS.MAILS_POOL, [...pool, ...formatted]);
+    void supabaseSync.syncPoolAdd('mailsPool', formatted);
   }
 
   public deleteMail(id: string): void {
     this.setItem(STORAGE_KEYS.MAILS_POOL, this.getMails().filter(m => m.id !== id));
+    void supabaseSync.syncPoolDelete('mailsPool', [id]);
   }
 
   public deleteUsedMails(): number {
@@ -1646,18 +1694,21 @@ class DatabaseService {
     const usedIds = pool.filter(m => m.used).map(m => m.id);
     const kept = pool.filter(m => !m.used);
     this.setItem(STORAGE_KEYS.MAILS_POOL, kept);
+    void supabaseSync.syncPoolDelete('mailsPool', usedIds);
     return pool.length - kept.length;
   }
 
   public deleteAllMails(): void {
     const allIds = this.getMails().map(m => m.id);
     this.setItem(STORAGE_KEYS.MAILS_POOL, []);
+    void supabaseSync.syncPoolDelete('mailsPool', allIds);
   }
 
   public consumeMails(
     userId: string,
     country: string,
-    quantity: number
+    quantity: number,
+    domain?: string
   ): { results: string[]; fromPoolCount: number; generatedCount: number; error?: string } {
     const targetQty = Math.max(1, Math.min(100, quantity || 1));
     const minAccess = this.canUseTool(userId, TOOL_CREDIT_COSTS.MAIL);
@@ -1681,7 +1732,25 @@ class DatabaseService {
       };
     }
 
-    const effectiveQty = Math.min(targetQty, availablePool.length);
+    const normalizedDomain =
+      domain && domain !== 'all' ? domain.trim().toLowerCase().replace(/^@/, '') : '';
+    const matchesDomain = (email: string) =>
+      !normalizedDomain || email.toLowerCase().endsWith(`@${normalizedDomain}`);
+
+    const domainAvailablePool = normalizedDomain
+      ? availablePool.filter(m => matchesDomain(m.email))
+      : availablePool;
+
+    if (domainAvailablePool.length === 0) {
+      return {
+        results: [],
+        fromPoolCount: 0,
+        generatedCount: 0,
+        error: `No @${normalizedDomain} emails available in the Database Pool. Upload @${normalizedDomain} emails in Admin Panel or switch to All Domains.`,
+      };
+    }
+
+    const effectiveQty = Math.min(targetQty, domainAvailablePool.length);
     const batchAccess = this.canUseTool(userId, effectiveQty * TOOL_CREDIT_COSTS.MAIL);
     if (!batchAccess.allowed) {
       return {
@@ -1698,7 +1767,12 @@ class DatabaseService {
     const isGlobalCountry = !country || country === 'Any' || country === 'All Countries';
 
     for (const item of pool) {
-      if (matching.length < effectiveQty && !item.used && (isGlobalCountry || item.country === country)) {
+      if (
+        matching.length < effectiveQty &&
+        !item.used &&
+        matchesDomain(item.email) &&
+        (isGlobalCountry || item.country === country)
+      ) {
         item.used = true;
         item.usedBy = userId;
         item.usedAt = new Date().toISOString();
@@ -1708,11 +1782,11 @@ class DatabaseService {
       remaining.push(item);
     }
 
-    // If exact country match didn't yield enough, pick from any remaining unused emails in the pool
+    // If exact country match didn't yield enough, pick from any remaining unused emails matching the selected domain
     if (matching.length < effectiveQty) {
       for (let i = 0; i < remaining.length; i++) {
         const item = remaining[i];
-        if (!item.used && matching.length < effectiveQty) {
+        if (!item.used && matchesDomain(item.email) && matching.length < effectiveQty) {
           item.used = true;
           item.usedBy = userId;
           item.usedAt = new Date().toISOString();
@@ -1725,6 +1799,7 @@ class DatabaseService {
 
     if (matching.length > 0) {
       this.setItem(STORAGE_KEYS.MAILS_POOL, [...matching, ...remaining]);
+      void supabaseSync.syncPoolConsume('mailsPool', matching.map(m => m.id));
     }
 
     if (matching.length === 0) {
@@ -1984,6 +2059,9 @@ class DatabaseService {
     this.setItem(STORAGE_KEYS.CPA_NETWORKS, cpaNetworks);
     this.setItem(STORAGE_KEYS.PROXY_SITES, proxySites);
     this.setItem(STORAGE_KEYS.ANTIDETECT_BROWSERS, antidetectBrowsers);
+    cpaNetworks.forEach(c => void supabaseSync.syncResourceUpsert('cpaNetworks', c));
+    proxySites.forEach(p => void supabaseSync.syncResourceUpsert('proxySites', p));
+    antidetectBrowsers.forEach(b => void supabaseSync.syncResourceUpsert('antidetectBrowsers', b));
 
     // Also seed initial sample pool records for admin generator databases
     const sampleUAs: Array<Omit<UserAgentEntry, 'id' | 'used' | 'createdAt'>> = [
@@ -2074,6 +2152,12 @@ class DatabaseService {
     this.addMultipleNumbers(sampleNumbers);
 
     const sampleMails: Array<Omit<MailEntry, 'id' | 'used' | 'createdAt'>> = [
+      { country: 'United States', email: 'alex.morgan.us@gmail.com' },
+      { country: 'United States', email: 'sarah.jenkins.cpa@gmail.com' },
+      { country: 'United Kingdom', email: 'oliver.clark.uk@gmail.com' },
+      { country: 'Canada', email: 'liam.hudson.ca@gmail.com' },
+      { country: 'Germany', email: 'max.schmidt.de@gmail.com' },
+      { country: 'Bangladesh', email: 'rafiq.islam.bd@gmail.com' },
       { country: 'United States', email: 'verified.marketing@example.com' },
       { country: 'United Kingdom', email: 'digital.traffic@example.co.uk' },
       { country: 'Germany', email: 'campaign.lead@example.de' },
@@ -2104,10 +2188,12 @@ class DatabaseService {
       list.push(saved);
     }
     this.setItem(STORAGE_KEYS.CPA_NETWORKS, list);
+    void supabaseSync.syncResourceUpsert('cpaNetworks', saved);
   }
 
   public deleteCpaNetwork(id: string): void {
     this.setItem(STORAGE_KEYS.CPA_NETWORKS, this.getCpaNetworks().filter(c => c.id !== id));
+    void supabaseSync.syncResourceDelete('cpaNetworks', id);
   }
 
   public getProxySites(): ProxySite[] {
@@ -2124,10 +2210,12 @@ class DatabaseService {
       list.push(saved);
     }
     this.setItem(STORAGE_KEYS.PROXY_SITES, list);
+    void supabaseSync.syncResourceUpsert('proxySites', saved);
   }
 
   public deleteProxySite(id: string): void {
     this.setItem(STORAGE_KEYS.PROXY_SITES, this.getProxySites().filter(p => p.id !== id));
+    void supabaseSync.syncResourceDelete('proxySites', id);
   }
 
   public getAntidetectBrowsers(): AntidetectBrowser[] {
@@ -2144,10 +2232,12 @@ class DatabaseService {
       list.push(saved);
     }
     this.setItem(STORAGE_KEYS.ANTIDETECT_BROWSERS, list);
+    void supabaseSync.syncResourceUpsert('antidetectBrowsers', saved);
   }
 
   public deleteAntidetectBrowser(id: string): void {
     this.setItem(STORAGE_KEYS.ANTIDETECT_BROWSERS, this.getAntidetectBrowsers().filter(b => b.id !== id));
+    void supabaseSync.syncResourceDelete('antidetectBrowsers', id);
   }
 
   // --- Usage History ---
@@ -2180,6 +2270,7 @@ class DatabaseService {
     };
     history.unshift(entry);
     this.setItem(STORAGE_KEYS.USAGE_HISTORY, history);
+    void supabaseSync.syncUsageHistoryAdd(entry);
   }
 
   public clearUsageHistory(userId: string): void {
@@ -2187,6 +2278,7 @@ class DatabaseService {
     const removedIds = history.filter(h => h.userId === userId).map(h => h.id);
     const filtered = history.filter(h => h.userId !== userId);
     this.setItem(STORAGE_KEYS.USAGE_HISTORY, filtered);
+    void supabaseSync.syncUsageHistoryClear(removedIds);
   }
 
   // --- Saved Results (Separated Per User) ---
@@ -2209,6 +2301,7 @@ class DatabaseService {
     };
     all.unshift(newEntry);
     this.setItem(STORAGE_KEYS.SAVED_RESULTS, all);
+    void supabaseSync.syncSavedResultAdd(newEntry);
     return newEntry;
   }
 
@@ -2216,6 +2309,7 @@ class DatabaseService {
     const all = this.getItem<SavedResult[]>(STORAGE_KEYS.SAVED_RESULTS, []);
     const filtered = all.filter(s => !(s.id === id && s.userId === userId));
     this.setItem(STORAGE_KEYS.SAVED_RESULTS, filtered);
+    void supabaseSync.syncSavedResultDelete(id);
   }
 
   // --- Support Messaging ---
@@ -2249,6 +2343,7 @@ class DatabaseService {
     };
     tickets.unshift(newTicket);
     this.setItem(STORAGE_KEYS.SUPPORT_TICKETS, tickets);
+    void supabaseSync.syncSupportTicketCreate(newTicket);
     return newTicket;
   }
 
@@ -2268,6 +2363,7 @@ class DatabaseService {
       tickets[idx].status = nextStatus;
       tickets[idx].updatedAt = new Date().toISOString();
       this.setItem(STORAGE_KEYS.SUPPORT_TICKETS, tickets);
+      void supabaseSync.syncSupportTicketReply(ticketId, tickets[idx].userId, msg, nextStatus);
     }
   }
 
@@ -2278,6 +2374,7 @@ class DatabaseService {
       tickets[idx].status = status;
       tickets[idx].updatedAt = new Date().toISOString();
       this.setItem(STORAGE_KEYS.SUPPORT_TICKETS, tickets);
+      void supabaseSync.syncSupportTicketStatus(ticketId, status);
     }
   }
 
@@ -2290,6 +2387,7 @@ class DatabaseService {
     const current = this.getWebsiteContent();
     const updated = { ...current, ...content };
     this.setItem(STORAGE_KEYS.WEBSITE_CONTENT, updated);
+    void supabaseSync.syncWebsiteContent(updated);
   }
 
   // --- Payment System (bKash, Nagad, Rocket, Binance + Admin Approval / Decline) ---
@@ -2301,6 +2399,7 @@ class DatabaseService {
     const current = this.getPaymentGateways();
     const updated = { ...current, ...settings };
     this.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, updated);
+    void supabaseSync.syncPaymentGateways(updated);
   }
 
   public getPaymentPackages(): PaymentPackage[] {
@@ -2369,6 +2468,7 @@ class DatabaseService {
 
     requests.unshift(newReq);
     this.setItem(STORAGE_KEYS.PAYMENT_REQUESTS, requests);
+    void supabaseSync.syncPaymentRequestCreate(newReq);
 
     const users = this.getUsers();
     const uIdx = users.findIndex(u => u.id === user.id);
@@ -2427,6 +2527,11 @@ class DatabaseService {
       }
     }
 
+    void supabaseSync.syncPaymentRequestReview(req, {
+      plan: req.packageName,
+      planStatus: 'active',
+      credits: nextCredits,
+    });
 
     return { success: true };
   }
@@ -2463,8 +2568,180 @@ class DatabaseService {
       }
     }
 
+    void supabaseSync.syncPaymentRequestReview(
+      req,
+      uIdx !== -1 && users[uIdx].planStatus !== 'active' ? { planStatus: nextPlanStatus } : undefined
+    );
 
     return { success: true };
+  }
+
+  // --- Support Ticket Admin Notes ---
+  public updateTicketAdminNote(ticketId: string, adminNote: string): void {
+    const tickets = this.getSupportTickets();
+    const idx = tickets.findIndex(t => t.id === ticketId);
+    if (idx !== -1) {
+      tickets[idx].adminNote = adminNote;
+      tickets[idx].updatedAt = new Date().toISOString();
+      this.setItem(STORAGE_KEYS.SUPPORT_TICKETS, tickets);
+    }
+  }
+
+  // --- Support Channels Management (Telegram & WhatsApp) ---
+  public getSupportChannels(): SupportChannel[] {
+    const list = this.getItem<SupportChannel[]>(STORAGE_KEYS.SUPPORT_CHANNELS, DEFAULT_SUPPORT_CHANNELS);
+    return [...list].sort((a, b) => a.order - b.order);
+  }
+
+  public saveSupportChannel(channel: Omit<SupportChannel, 'createdAt'> & { createdAt?: string }): void {
+    const list = this.getSupportChannels();
+    const idx = list.findIndex(c => c.id === channel.id);
+    const fullItem: SupportChannel = {
+      ...channel,
+      createdAt: channel.createdAt || new Date().toISOString(),
+    };
+    if (fullItem.isPrimary) {
+      list.forEach(c => {
+        if (c.type === fullItem.type && c.id !== fullItem.id) {
+          c.isPrimary = false;
+        }
+      });
+    }
+    if (idx !== -1) {
+      list[idx] = fullItem;
+    } else {
+      list.push(fullItem);
+    }
+    this.setItem(STORAGE_KEYS.SUPPORT_CHANNELS, list);
+  }
+
+  public deleteSupportChannel(id: string): void {
+    const list = this.getSupportChannels().filter(c => c.id !== id);
+    this.setItem(STORAGE_KEYS.SUPPORT_CHANNELS, list);
+  }
+
+  // --- Announcements & Notifications Management ---
+  public getAnnouncements(): AnnouncementPost[] {
+    const list = this.getItem<AnnouncementPost[]>(STORAGE_KEYS.ANNOUNCEMENTS, DEFAULT_ANNOUNCEMENTS);
+    return [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public saveAnnouncement(post: Omit<AnnouncementPost, 'createdAt'> & { createdAt?: string }): void {
+    const list = this.getAnnouncements();
+    const idx = list.findIndex(p => p.id === post.id);
+    const fullItem: AnnouncementPost = {
+      ...post,
+      createdAt: post.createdAt || new Date().toISOString(),
+    };
+    if (idx !== -1) {
+      list[idx] = fullItem;
+    } else {
+      list.unshift(fullItem);
+    }
+    this.setItem(STORAGE_KEYS.ANNOUNCEMENTS, list);
+  }
+
+  public deleteAnnouncement(id: string): void {
+    const list = this.getAnnouncements().filter(p => p.id !== id);
+    this.setItem(STORAGE_KEYS.ANNOUNCEMENTS, list);
+  }
+
+  // --- User Settings & Preferences ---
+  public applyUserPreferencesToDom(prefs: UserPreferences): void {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    root.dataset.font = prefs.fontStyle || 'Plus Jakarta Sans';
+    root.classList.toggle('oe-no-rgb', prefs.rgbEffects === false);
+    root.classList.toggle('oe-reduced-motion', prefs.animations === false);
+
+    const mode = prefs.themeMode || 'dark';
+    const isLight =
+      mode === 'light' ||
+      (mode === 'system' &&
+        typeof window !== 'undefined' &&
+        window.matchMedia('(prefers-color-scheme: light)').matches);
+    root.classList.toggle('dark', !isLight);
+    root.classList.toggle('oe-light', isLight);
+    root.dataset.colorMode = isLight ? 'light' : 'dark';
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('oe-prefs-changed'));
+      window.dispatchEvent(new CustomEvent('oe-theme-changed'));
+    }
+  }
+
+  public getUserPreferences(): UserPreferences {
+    return {
+      ...DEFAULT_USER_PREFERENCES,
+      ...this.getItem<Partial<UserPreferences>>(STORAGE_KEYS.USER_PREFERENCES, DEFAULT_USER_PREFERENCES),
+    };
+  }
+
+  public updateUserPreferences(patch: Partial<UserPreferences>): UserPreferences {
+    const next = { ...this.getUserPreferences(), ...patch };
+    this.setItem(STORAGE_KEYS.USER_PREFERENCES, next);
+    this.applyUserPreferencesToDom(next);
+    return next;
+  }
+
+  public resetUserPreferences(): UserPreferences {
+    this.setItem(STORAGE_KEYS.USER_PREFERENCES, DEFAULT_USER_PREFERENCES);
+    this.applyUserPreferencesToDom(DEFAULT_USER_PREFERENCES);
+    return DEFAULT_USER_PREFERENCES;
+  }
+
+  public rotateUserSession(userId?: string): string {
+    const now = new Date().toISOString();
+    try {
+      localStorage.setItem('oe_session_rotated_at', now);
+      if (userId) {
+        const users = this.getUsers();
+        const idx = users.findIndex(u => u.id === userId);
+        if (idx !== -1) {
+          users[idx].lastLoginAt = now;
+          users[idx].updatedAt = now;
+          this.setItem(STORAGE_KEYS.USERS, users);
+          const current = this.getCurrentUser();
+          if (current && current.id === userId) {
+            this.setCurrentUser(users[idx]);
+          }
+        }
+      }
+    } catch {
+      // Ignore storage quota errors
+    }
+    return now;
+  }
+
+  public submitContactInquiry(data: {
+    name: string;
+    email: string;
+    message: string;
+    user?: User | null;
+  }): { ticketId?: string; saved: boolean } {
+    if (data.user) {
+      const ticket = this.createSupportTicket(
+        data.user,
+        `Website Inquiry (${data.name.trim()})`,
+        data.message.trim()
+      );
+      return { ticketId: ticket.id, saved: true };
+    }
+    try {
+      const key = 'oe_contact_inquiries';
+      const existing = this.getItem<Array<{ id: string; name: string; email: string; message: string; createdAt: string }>>(key, []);
+      existing.unshift({
+        id: 'inq_' + Date.now(),
+        name: data.name.trim(),
+        email: data.email.trim(),
+        message: data.message.trim(),
+        createdAt: new Date().toISOString(),
+      });
+      this.setItem(key, existing.slice(0, 50));
+      return { saved: true };
+    } catch {
+      return { saved: false };
+    }
   }
 }
 

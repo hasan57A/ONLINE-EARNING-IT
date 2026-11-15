@@ -1,61 +1,79 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useRouter } from '../context/RouterContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/Toast';
 import { db } from '../services/db';
+import { playUiSound } from '../services/sound';
 import { Navbar } from '../components/layout/Navbar';
 import { Footer } from '../components/layout/Footer';
+import { ThemeSwitcher } from '../components/ui/ThemeSwitcher';
+import heroPreviewImg from '../assets/images/hero_command_preview_1794739934854.jpg';
 import {
   ArrowRight,
-  ShieldCheck,
-  Zap,
+  ArrowUpRight,
   Check,
   ChevronDown,
-  Layers,
   Send,
   MessageSquare,
   Sparkles,
   Copy,
   Globe2,
-  Cpu,
-  BarChart3,
   ExternalLink,
   CheckCircle2,
-  Terminal,
-  Activity,
   Compass,
-  Database,
   Mail,
   PhoneCall,
+  Shield,
+  Zap,
+  Layers,
 } from 'lucide-react';
 import { RealisticToolIcon } from '../components/ui/RealisticIcon';
 import { DeviceIcons, BrowserIcons, InAppIcons } from '../components/ui/BrandIcons';
 import { motion, AnimatePresence } from 'motion/react';
+import {
+  SplitText,
+  TiltCard,
+  Magnetic,
+  CountUp,
+  Marquee,
+  SpotlightCard,
+  StaggerGrid,
+  StaggerItem,
+  ScrollParallaxMedia,
+  Reveal,
+} from '../components/motion/kit';
+import { HeroOrbit, ToolCarousel3D, RevealWords } from '../components/motion/Extras';
+
+const EASE = [0.16, 1, 0.3, 1] as const;
 
 export const HomePage: React.FC = () => {
   const { navigate } = useRouter();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { showToast } = useToast();
   const content = db.getWebsiteContent();
   const tools = db.getTools();
 
-  // Contact form state
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactMsg, setContactMsg] = useState('');
   const [submittingContact, setSubmittingContact] = useState(false);
 
-  // FAQ Accordion State
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [toolFilter, setToolFilter] = useState<'all' | 'pool' | 'free'>('all');
 
-  // Interactive Live Hero Preview Widget State
   const [heroTab, setHeroTab] = useState<'ua' | 'lead' | 'contact'>('ua');
   const [sampleUaDevice, setSampleUaDevice] = useState<'Android' | 'iPhone' | 'Windows'>('Android');
   const [sampleUaBrowser, setSampleUaBrowser] = useState<'Chrome' | 'Facebook' | 'Instagram'>('Chrome');
   const [sampleUaVersion, setSampleUaVersion] = useState<string>('124.0.6367.60');
   const [isCopied, setIsCopied] = useState(false);
 
-  // Computed live sample
+  const filteredTools = useMemo(() => {
+    const isFreeSlug = (slug: string) => slug === 'text-shuffler' || slug === 'duplicate-text-remover';
+    if (toolFilter === 'free') return tools.filter(t => isFreeSlug(t.slug));
+    if (toolFilter === 'pool') return tools.filter(t => !isFreeSlug(t.slug));
+    return tools;
+  }, [tools, toolFilter]);
+
   const getLiveSampleUA = () => {
     if (sampleUaDevice === 'Android') {
       if (sampleUaBrowser === 'Facebook') {
@@ -77,56 +95,90 @@ export const HomePage: React.FC = () => {
 
   const copyLiveSample = (text: string) => {
     navigator.clipboard.writeText(text);
+    playUiSound('copy');
     setIsCopied(true);
     showToast('Copied string to clipboard!', 'success');
     setTimeout(() => setIsCopied(false), 2000);
   };
 
-  const services = [
+  const bentoCapabilities = [
     {
       num: '01',
-      title: 'CPA Marketing',
-      description: 'Battle-tested affiliate frameworks, conversion funnels, pre-landing architectures, and high-ROI traffic routing models for global campaigns.',
-      badge: 'High Yield',
-      accent: 'from-blue-500/20 to-blue-600/5',
-      border: 'border-blue-500/30',
+      title: 'CPA Marketing & Conversion Funnels',
+      category: 'High-Yield Acquisition',
+      description:
+        'Battle-tested affiliate frameworks, pre-landing architectures, and precision GEO traffic routing models built for sustained ROI across global tier-1 networks.',
+      span: 'lg:col-span-7',
+      rgbClass: 'oe-rgb-violet',
+      spotlight: 'rgba(var(--oe-accent-rgb), 0.2)',
+      href: '/resources/cpa-networks',
+      cta: 'Browse CPA Catalog',
     },
     {
       num: '02',
-      title: 'Adsterra Methods',
-      description: 'Specialized direct-link scaling, social traffic arbitrage strategies, anti-bot filtering, and verified CPM maximization tactics.',
-      badge: 'Arbitrage',
-      accent: 'from-amber-500/20 to-amber-600/5',
-      border: 'border-amber-500/30',
+      title: 'Adsterra Direct-Link Arbitrage',
+      category: 'Traffic Scaling',
+      description:
+        'Specialized social arbitrage workflows, anti-bot signature filtering, and clean device rotation to maximize CPM efficiency.',
+      span: 'lg:col-span-5',
+      rgbClass: 'oe-rgb-amber',
+      spotlight: 'rgba(245, 158, 11, 0.16)',
+      href: '/tools/user-agent-generator',
+      cta: 'Open UA Engine',
     },
     {
       num: '03',
-      title: 'Monetag Methods',
-      description: 'In-page push, smartlink triggers, and vignette monetization setups designed to maximize yields without hurting user retention.',
-      badge: 'Smartlinks',
-      accent: 'from-emerald-500/20 to-emerald-600/5',
-      border: 'border-emerald-500/30',
+      title: 'Monetag Smartlink Optimization',
+      category: 'Retention-Safe Triggers',
+      description:
+        'In-page push and vignette monetization setups structured to capture higher fill rates without disrupting user flow.',
+      span: 'lg:col-span-5',
+      rgbClass: 'oe-rgb-emerald',
+      spotlight: 'rgba(16, 185, 129, 0.16)',
+      href: '/resources/proxy-sites',
+      cta: 'View Proxy Index',
     },
     {
       num: '04',
-      title: 'Pro Marketing Tools',
-      description: 'Enterprise-grade user agent generators, clean lead test pools, text normalizers, and formatting utilities powered by affordable credit packages.',
-      badge: 'Credit Powered',
-      accent: 'from-purple-500/20 to-purple-600/5',
-      border: 'border-purple-500/30',
+      title: 'Zero-Duplicate Admin Pool Engine',
+      category: 'Dedicated Isolation',
+      description:
+        'Every User Agent, Phone Number, Gmail/Mail address, and Lead record pulled from the synced pool is immediately retired so delivered data never repeats across campaigns.',
+      span: 'lg:col-span-7',
+      rgbClass: 'oe-rgb-cyan',
+      spotlight: 'rgba(6, 182, 212, 0.18)',
+      href: '/tools',
+      cta: 'Inspect Tool Suite',
     },
     {
       num: '05',
-      title: 'CPA Account Buy & Sell',
-      description: 'Informational marketplace guidance for verified advertiser accounts, network approvals, and seamless onboarding transitions.',
-      badge: 'Account Hub',
-      accent: 'from-cyan-500/20 to-cyan-600/5',
-      border: 'border-cyan-500/30',
+      title: '5-Version Parallel Cycling',
+      category: 'Browser & Webview Sync',
+      description:
+        'Combine Chrome, Safari, Edge, or Opera with Facebook, Instagram, TikTok, or WeChat webview versions under language-free Android rules.',
+      span: 'lg:col-span-6',
+      rgbClass: 'oe-rgb-pink',
+      spotlight: 'rgba(236, 72, 153, 0.16)',
+      href: '/tools/user-agent-generator',
+      cta: 'Configure Versions',
+    },
+    {
+      num: '06',
+      title: 'Transparent Credit Packages',
+      category: 'bKash · Nagad · Rocket · Binance',
+      description:
+        'Text Shuffler and Duplicate Remover remain 100% free. Generator pools run on clear per-item credit rates with instant TXT, CSV, and JSON exports.',
+      span: 'lg:col-span-6',
+      rgbClass: 'oe-rgb-blue',
+      spotlight: 'rgba(var(--oe-accent2-rgb), 0.18)',
+      href: '/payment',
+      cta: 'Compare Plans',
     },
   ];
 
   const packages = db.getPaymentPackages();
   const membershipPlans = packages.map((pkg, idx) => ({
+    id: pkg.id,
     name: pkg.name,
     price: `৳${pkg.priceBdt.toLocaleString()}`,
     usdt: `$${pkg.priceUsdt} USDT`,
@@ -140,181 +192,240 @@ export const HomePage: React.FC = () => {
   const faqs = [
     {
       q: 'What is ONLINE EARNING IT?',
-      a: 'ONLINE EARNING IT is a comprehensive, modern platform providing digital marketers, media buyers, and developers with high-yield web tools (such as User Agent Generator with custom browser & in-app version control, Lead Generator, Text Shuffler, Duplicate Remover, and Number/Mail utilities) alongside curated catalogs of CPA networks, proxy providers, and antidetect browsers.',
+      a: 'ONLINE EARNING IT is a modern marketing engineering platform providing media buyers, CPA affiliates, and QA teams with high-throughput utilities (User Agent Generator with dual browser and in-app version control, Lead Generator, Mail Generator with @gmail.com filtering, Phone Number Generator, Text Shuffler, and Duplicate Text Remover) alongside curated network, proxy, and antidetect catalogs.',
     },
     {
       q: 'How does the Package & Credit System work?',
-      a: 'Text Shuffler and Duplicate Text Remover are 100% Free. Generator tools require an active approved package and credits: User Agent (1 Credit), Number Generator (2 Credits), Mail Generator (3 Credits), and Lead Generator (5 Credits). Choose Starter Pass (500 Credits), Pro Marketer (1,500 Credits), or Agency Lifetime (10,000 Credits), submit your payment via bKash, Nagad, Rocket, or Binance, and start generating immediately once approved.',
+      a: 'Text Shuffler and Duplicate Text Remover are 100% Free. Generator tools require an active approved package and credits: User Agent (1 Credit), Number Generator (2 Credits), Mail Generator (3 Credits), and Lead Generator (5 Credits). Choose Starter Pass (500 Credits), Pro Marketer (1,500 Credits), or Agency Lifetime (10,000 Credits) via bKash, Nagad, Rocket, or Binance.',
     },
     {
       q: 'Can I customize both Browser and In-App Webview versions?',
-      a: 'Yes. Our User Agent Generator allows you to choose both a Web Browser (Chrome, Firefox, Safari, Edge, Opera) and an In-App Webview (Facebook, Facebook Lite, Instagram, TikTok, Twitter, LinkedIn, Snapchat) simultaneously, entering exact version numbers or selecting from our verified presets.',
+      a: 'Yes. The User Agent Generator lets you select both a Web Browser (Chrome, Firefox, Safari, Edge, Opera) and an In-App Webview (Facebook, Facebook Lite, Instagram, TikTok, Twitter, LinkedIn, Snapchat, WeChat) simultaneously with up to 5 parallel version presets.',
     },
     {
       q: 'How does the Android language-free rule work?',
-      a: 'In accordance with modern mobile traffic arbitrage standards, all Android user agents generated by our system are strictly language-free. No language or locale tags (such as en_US or FBLC/en_US) are attached to Android signatures, ensuring complete compatibility with clean GEO routing.',
+      a: 'All Android user agents produced by our engine are strictly language-free. No locale tags (such as en_US or FBLC/en_US) are injected into Android strings, ensuring clean compatibility across international GEO campaigns.',
     },
     {
-      q: 'How does exclusive database matching work?',
-      a: 'When an administrator adds verified User Agent, Lead, Number, or Mail records to the database pool, the generator automatically matches your device, browser, and country filters. Each generated pool entry is flagged as used and exclusively assigned to your account, preventing duplicate delivery across users.',
+      q: 'How does zero-duplicate pool cutting work?',
+      a: 'When an administrator populates the master User Agent, Lead, Number, or Mail database pools, each generated entry matching your country, device, or domain (@gmail.com) filters is marked as consumed and permanently cut from the active pool.',
     },
   ];
 
   const handleContactSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    playUiSound('click');
     setSubmittingContact(true);
-    setTimeout(() => {
-      setSubmittingContact(false);
-      setContactName('');
-      setContactEmail('');
-      setContactMsg('');
-      showToast('Thank you! Your message has been sent successfully.', 'success');
-    }, 600);
+    const result = db.submitContactInquiry({
+      name: contactName,
+      email: contactEmail,
+      message: contactMsg,
+      user,
+    });
+    setSubmittingContact(false);
+    if (!result.saved) {
+      showToast('Could not send your inquiry. Please try again.', 'error');
+      return;
+    }
+    setContactName('');
+    setContactEmail('');
+    setContactMsg('');
+    playUiSound('notification');
+    showToast(
+      result.ticketId
+        ? 'Your inquiry was added to Support Center! Our team will reply shortly.'
+        : 'Thank you! Your inquiry has been received.',
+      'success'
+    );
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-blue-600 selection:text-white relative overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-violet-600 selection:text-white relative overflow-hidden">
       <Navbar />
 
-      {/* Dynamic Aurora Ambient Background Orbs */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute -top-[10%] left-[15%] w-[650px] h-[650px] bg-gradient-to-tr from-blue-600/15 via-indigo-600/10 to-transparent rounded-full blur-[140px] animate-aurora" />
-        <div className="absolute top-[40%] -right-[10%] w-[550px] h-[550px] bg-gradient-to-bl from-amber-500/10 via-rose-500/5 to-transparent rounded-full blur-[160px] animate-aurora delay-1000" />
-        <div className="absolute bottom-[10%] left-[5%] w-[500px] h-[500px] bg-gradient-to-tr from-emerald-500/10 via-cyan-500/5 to-transparent rounded-full blur-[150px] animate-aurora delay-2000" />
+      {/* Dynamic Theme-Reactive Ambient Glows */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0" aria-hidden="true">
+        <motion.div
+          animate={{ x: [0, 32, 0], y: [0, -24, 0] }}
+          transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute -top-[10%] left-[10%] w-[680px] h-[680px] bg-gradient-to-tr from-violet-600/18 via-indigo-600/10 to-transparent rounded-full blur-[140px]"
+        />
+        <motion.div
+          animate={{ x: [0, -28, 0], y: [0, 26, 0] }}
+          transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+          className="absolute top-[36%] -right-[10%] w-[580px] h-[580px] bg-gradient-to-bl from-pink-500/12 via-violet-600/8 to-transparent rounded-full blur-[160px]"
+        />
+        <motion.div
+          animate={{ x: [0, 20, 0], y: [0, -20, 0] }}
+          transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut', delay: 4 }}
+          className="absolute bottom-[6%] left-[4%] w-[520px] h-[520px] bg-gradient-to-tr from-cyan-500/12 via-emerald-500/8 to-transparent rounded-full blur-[150px]"
+        />
       </div>
 
-      {/* Hero Section */}
-      <section className="relative z-10 pt-12 pb-20 lg:pt-24 lg:pb-32 border-b border-white/5 bg-subtle-grid">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* ============================================================
+          01. HERO SECTION — Editorial Value Prop + Live Sampler
+         ============================================================ */}
+      <section className="relative z-10 pt-10 pb-16 lg:pt-20 lg:pb-24 border-b border-slate-800/70 bg-subtle-grid">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
-            {/* Left Column: Headline & Action */}
+            {/* Left Column: Headline & Primary Conversion Action */}
             <motion.div
-              initial={{ opacity: 0, y: 30 }}
+              initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 0.75, ease: EASE }}
               className="lg:col-span-7 space-y-7 text-center lg:text-left"
             >
-              {/* Top Tagline Badge */}
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-blue-500/30 bg-gradient-to-r from-blue-950/80 to-slate-900/80 backdrop-blur-md shadow-lg shadow-blue-950/40">
-                <span className="flex h-2 w-2 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
-                </span>
-                <span className="text-xs font-bold uppercase tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-amber-300">
-                  ONLINE EARNING IT · Performance Toolset
-                </span>
+              <div className="flex items-center justify-center lg:justify-start gap-3 text-xs font-semibold text-slate-400">
+                <span className="h-px w-8 bg-gradient-to-r from-violet-500 to-cyan-400" />
+                <span className="text-violet-300 font-bold tracking-wide">Performance Marketing Suite</span>
+                <span aria-hidden="true">·</span>
+                <span>Zero-Duplicate Pool Architecture</span>
               </div>
 
-              {/* Refined Display Headline */}
-              <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white leading-[1.08] text-balance">
-                High Performance{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-sky-300 to-amber-300">
-                  Marketing Tools
-                </span>{' '}
-                & Device Engine
+              <h1 className="font-display text-4xl sm:text-6xl lg:text-[4.25rem] font-black tracking-tight text-slate-100 leading-[1.05] text-balance">
+                <SplitText text="High Performance" delay={0.08} />
+                <SplitText
+                  text="Marketing Tools"
+                  delay={0.34}
+                  className="text-transparent bg-clip-text bg-gradient-to-r from-violet-500 via-fuchsia-500 to-indigo-500 dark:from-violet-400 dark:via-pink-400 dark:to-cyan-300"
+                />
+                <SplitText text="& Device Engine" delay={0.6} />
               </h1>
 
-              <p className="text-base sm:text-lg text-slate-300 max-w-2xl leading-relaxed mx-auto lg:mx-0">
+              <motion.p
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, delay: 0.35, ease: EASE }}
+                className="text-base sm:text-lg text-slate-300 max-w-2xl leading-relaxed mx-auto lg:mx-0"
+              >
                 {content.heroDescription ||
-                  'Professional web toolsets engineered for CPA affiliates, media buyers, and traffic arbiters. Generate precision user agents with dual version control, test leads, and clean marketing data in milliseconds.'}
-              </p>
+                  'Precision web toolsets built for CPA affiliates, media buyers, and QA engineers. Generate custom dual-version user agents, extract clean @gmail.com & lead records, and sanitize campaign lists in milliseconds.'}
+              </motion.p>
 
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3.5 pt-2">
+              {/* Action Controls: 1 Dominant Primary CTA + Clean Secondary Actions */}
+              <motion.div
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.65, delay: 0.45, ease: EASE }}
+                className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3.5 pt-1"
+              >
                 {isAuthenticated ? (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => navigate('/dashboard')}
-                    className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm shadow-xl shadow-blue-600/30 flex items-center justify-center gap-2.5 transition-all cursor-pointer"
-                  >
-                    <span>Launch User Dashboard</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </motion.button>
-                ) : (
-                  <>
+                  <Magnetic className="w-full sm:w-auto">
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => navigate('/signup')}
-                      className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm shadow-xl shadow-blue-600/30 flex items-center justify-center gap-2.5 transition-all cursor-pointer group"
+                      onClick={() => {
+                        playUiSound('click');
+                        navigate('/dashboard');
+                      }}
+                      className="oe-cta w-full sm:w-auto px-8 py-4 rounded-2xl text-white font-bold text-sm shadow-xl flex items-center justify-center gap-2.5 cursor-pointer whitespace-nowrap"
                     >
-                      <span>Create Account</span>
-                      <Sparkles className="w-4 h-4 text-amber-300 group-hover:rotate-12 transition-transform" />
+                      <span>Open User Dashboard</span>
+                      <ArrowRight className="w-4 h-4" />
                     </motion.button>
+                  </Magnetic>
+                ) : (
+                  <>
+                    <Magnetic className="w-full sm:w-auto">
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => {
+                          playUiSound('click');
+                          navigate('/signup');
+                        }}
+                        className="oe-cta w-full sm:w-auto px-8 py-4 rounded-2xl text-white font-bold text-sm shadow-xl flex items-center justify-center gap-2.5 cursor-pointer group whitespace-nowrap"
+                      >
+                        <span>Create Free Account</span>
+                        <Sparkles className="w-4 h-4 text-amber-300 group-hover:rotate-12 transition-transform" />
+                      </motion.button>
+                    </Magnetic>
                     <button
-                      onClick={() => navigate('/signin')}
-                      className="w-full sm:w-auto px-7 py-4 rounded-2xl border border-white/10 hover:border-white/20 bg-slate-900/60 hover:bg-slate-900 text-slate-200 font-semibold text-sm transition-all cursor-pointer"
+                      onClick={() => {
+                        playUiSound('click');
+                        navigate('/signin');
+                      }}
+                      className="btn-premium-glass w-full sm:w-auto px-7 py-4 rounded-2xl text-sm cursor-pointer whitespace-nowrap"
                     >
                       Sign In
                     </button>
                   </>
                 )}
                 <button
-                  onClick={() => navigate('/tools')}
-                  className="w-full sm:w-auto px-6 py-4 rounded-2xl border border-white/5 hover:border-blue-500/40 bg-slate-950/60 hover:bg-slate-900 text-slate-300 font-semibold text-sm transition-all cursor-pointer flex items-center justify-center gap-2"
+                  onClick={() => {
+                    playUiSound('click');
+                    navigate('/tools');
+                  }}
+                  className="btn-premium-glass w-full sm:w-auto px-6 py-4 rounded-2xl text-sm cursor-pointer flex items-center justify-center gap-2 whitespace-nowrap"
                 >
-                  <Compass className="w-4 h-4 text-blue-400" />
+                  <Compass className="w-4 h-4 text-violet-400" />
                   <span>Explore 6 Tools</span>
                 </button>
-              </div>
+              </motion.div>
 
-              {/* Clean Trust Proof Metadata */}
-              <div className="pt-4 flex flex-wrap items-center justify-center lg:justify-start gap-3 text-xs text-slate-400 font-medium">
+              {/* Clean Unboxed Trust Metadata */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.7, delay: 0.6 }}
+                className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-3 text-xs text-slate-400 font-medium"
+              >
                 <span className="flex items-center gap-1.5 text-slate-300">
                   <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  Package Credit System
+                  Dedicated Admin-Fed Pools
                 </span>
                 <span aria-hidden="true" className="text-slate-600">·</span>
                 <span className="flex items-center gap-1.5 text-slate-300">
-                  <Check className="w-3.5 h-3.5 text-blue-400" />
-                  Instant TXT / CSV Export
+                  <Check className="w-3.5 h-3.5 text-violet-400" />
+                  Instant TXT / CSV / JSON Export
                 </span>
                 <span aria-hidden="true" className="text-slate-600">·</span>
                 <span className="flex items-center gap-1.5 text-slate-300">
-                  <Check className="w-3.5 h-3.5 text-amber-400" />
-                  Targeted Tier-1 GEO Pools
+                  <Check className="w-3.5 h-3.5 text-cyan-400" />
+                  Zero-Duplicate Cut Engine
                 </span>
-              </div>
+              </motion.div>
             </motion.div>
 
-            {/* Right Column: Holographic Interactive Live Studio */}
+            {/* Right Column: Interactive Live Sampler Studio */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-              className="lg:col-span-5 flex justify-center"
+              initial={{ opacity: 0, scale: 0.94, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0.85, delay: 0.18, ease: EASE }}
+              className="lg:col-span-5 flex justify-center relative"
             >
-              <div className="relative w-full max-w-lg p-6 sm:p-7 rounded-3xl border border-blue-500/30 bg-gradient-to-b from-slate-900/90 via-slate-900/70 to-slate-950/90 shadow-2xl backdrop-blur-2xl space-y-5">
-                {/* Ambient glow inside card */}
-                <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
+              <HeroOrbit />
+              <TiltCard
+                max={4}
+                className="oe-panel oe-rgb-violet relative w-full max-w-lg p-6 sm:p-7 rounded-3xl backdrop-blur-2xl space-y-5"
+              >
+                <div className="absolute -top-8 right-4 w-44 h-44 bg-violet-500/15 rounded-full blur-3xl pointer-events-none" />
 
-                {/* Header with Emblem & Active Radar */}
-                <div className="flex items-center justify-between pb-4 border-b border-white/10">
-                  <div className="flex items-center gap-3">
+                {/* Sampler Header */}
+                <div className="flex items-center justify-between gap-2 pb-4 border-b border-slate-800/80">
+                  <div className="flex items-center gap-3 min-w-0">
                     <img
                       src="/assets/aistudio/Online_Earning_IT_Logo__e2215d9f_e2215d9f.png"
                       alt="ONLINE EARNING IT"
-                      className="w-11 h-11 object-contain drop-shadow-[0_4px_16px_rgba(37,99,235,0.4)]"
+                      className="w-10 h-10 object-contain drop-shadow-[0_4px_16px_rgba(var(--oe-accent-rgb),0.5)] shrink-0"
                     />
-                    <div>
-                      <span className="text-xs font-black text-white tracking-tight uppercase block">
+                    <div className="min-w-0">
+                      <span className="text-xs font-black text-slate-100 tracking-tight uppercase block truncate">
                         ONLINE EARNING IT
                       </span>
-                      <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1.5">
-                        <Activity className="w-3 h-3 text-emerald-400 animate-pulse" />
-                        <span>Interactive Sampler</span>
+                      <span className="text-[11px] text-slate-400 font-mono block truncate">
+                        Interactive Output Preview
                       </span>
                     </div>
                   </div>
 
-                  <span className="text-[10px] px-2.5 py-1 rounded-full font-mono font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                    Live Output
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <ThemeSwitcher />
+                  </div>
                 </div>
 
-                {/* Segmented Mode Picker */}
-                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-slate-950 border border-white/5 text-xs">
+                {/* Segmented Interactive Mode Switch */}
+                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-slate-950/90 border border-slate-800 text-xs">
                   {(['ua', 'lead', 'contact'] as const).map(tab => {
                     const label = tab === 'ua' ? 'User Agent' : tab === 'lead' ? 'Lead Sample' : 'Phone & Mail';
                     const isActive = heroTab === tab;
@@ -322,16 +433,19 @@ export const HomePage: React.FC = () => {
                       <button
                         key={tab}
                         type="button"
-                        onClick={() => setHeroTab(tab)}
-                        className={`relative py-2 text-center font-bold rounded-xl transition-all cursor-pointer ${
-                          isActive ? 'text-white' : 'text-slate-400 hover:text-white'
+                        onClick={() => {
+                          playUiSound('click');
+                          setHeroTab(tab);
+                        }}
+                        className={`relative py-2 text-center font-bold rounded-xl transition-colors cursor-pointer whitespace-nowrap ${
+                          isActive ? 'text-white' : 'text-slate-400 hover:text-slate-100'
                         }`}
                       >
                         {isActive && (
                           <motion.div
                             layoutId="hero-sampler-tab"
-                            className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 shadow-md"
-                            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                            className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 shadow-md"
+                            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
                           />
                         )}
                         <span className="relative z-10">{label}</span>
@@ -340,84 +454,101 @@ export const HomePage: React.FC = () => {
                   })}
                 </div>
 
-                {/* Live Sampler Display Area */}
+                {/* Live Sampler Viewport */}
                 <AnimatePresence mode="wait">
                   {heroTab === 'ua' && (
                     <motion.div
                       key="ua"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
+                      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                      transition={{ duration: 0.22, ease: EASE }}
                       className="space-y-3"
                     >
-                      {/* Configuration Chips */}
-                      <div className="flex items-center justify-between text-[11px] text-slate-400">
-                        <span className="font-semibold text-slate-300">Active Signature:</span>
-                        <div className="flex gap-1.5">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 gap-2">
+                        <span className="font-semibold text-slate-300">Active Signature</span>
+                        <div className="flex flex-wrap gap-1.5 justify-end">
                           <button
                             type="button"
                             onClick={() => {
+                              playUiSound('click');
                               setSampleUaDevice('Android');
                               setSampleUaBrowser('Chrome');
                               setSampleUaVersion('124.0.6367.60');
                             }}
-                            className={`px-2 py-0.5 rounded-lg font-mono text-[10px] transition-colors cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-lg font-mono text-[10px] transition-all cursor-pointer flex items-center gap-1 ${
                               sampleUaDevice === 'Android' && sampleUaBrowser === 'Chrome'
-                                ? 'bg-blue-600 text-white font-bold'
-                                : 'bg-slate-800 text-slate-400 hover:text-white'
+                                ? 'bg-violet-600 text-white font-bold shadow-[0_0_12px_rgba(var(--oe-accent-rgb),0.5)]'
+                                : 'bg-slate-900 text-slate-400 hover:text-slate-100 border border-slate-800'
                             }`}
                           >
-                            Android
+                            <DeviceIcons.Android className="w-3 h-3" />
+                            <span>Android</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => {
+                              playUiSound('click');
                               setSampleUaDevice('Android');
                               setSampleUaBrowser('Facebook');
                               setSampleUaVersion('448.0.0.32.115');
                             }}
-                            className={`px-2 py-0.5 rounded-lg font-mono text-[10px] transition-colors cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-lg font-mono text-[10px] transition-all cursor-pointer flex items-center gap-1 ${
                               sampleUaBrowser === 'Facebook'
-                                ? 'bg-indigo-600 text-white font-bold'
-                                : 'bg-slate-800 text-slate-400 hover:text-white'
+                                ? 'bg-indigo-600 text-white font-bold shadow-[0_0_12px_rgba(var(--oe-accent2-rgb),0.5)]'
+                                : 'bg-slate-900 text-slate-400 hover:text-slate-100 border border-slate-800'
                             }`}
                           >
-                            FB In-App
+                            <InAppIcons.Facebook className="w-3 h-3" />
+                            <span>FB In-App</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => {
+                              playUiSound('click');
                               setSampleUaDevice('iPhone');
                               setSampleUaBrowser('Chrome');
                               setSampleUaVersion('17.4.1');
                             }}
-                            className={`px-2 py-0.5 rounded-lg font-mono text-[10px] transition-colors cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-lg font-mono text-[10px] transition-all cursor-pointer flex items-center gap-1 ${
                               sampleUaDevice === 'iPhone'
-                                ? 'bg-amber-600 text-white font-bold'
-                                : 'bg-slate-800 text-slate-400 hover:text-white'
+                                ? 'bg-pink-600 text-white font-bold shadow-[0_0_12px_rgba(236,72,153,0.5)]'
+                                : 'bg-slate-900 text-slate-400 hover:text-slate-100 border border-slate-800'
                             }`}
                           >
-                            iPhone
+                            <DeviceIcons.iPhone className="w-3 h-3" />
+                            <span>iPhone</span>
                           </button>
                         </div>
                       </div>
 
-                      {/* Code Block Box */}
-                      <div className="p-4 rounded-2xl border border-white/10 bg-slate-950 font-mono text-xs text-slate-300 leading-relaxed break-all relative group shadow-inner">
-                        <div className="text-[10px] text-blue-400 font-bold uppercase mb-1 flex items-center justify-between">
-                          <span>{sampleUaDevice} · {sampleUaBrowser} (v{sampleUaVersion})</span>
-                          <span className="text-emerald-400">Verified Syntax</span>
+                      <div className="p-4 rounded-2xl border border-slate-800 bg-slate-950/95 font-mono text-xs text-slate-300 leading-relaxed break-all relative shadow-inner">
+                        <div className="text-[10px] text-violet-300 font-bold mb-1.5 flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-1.5">
+                            {sampleUaBrowser === 'Facebook' ? (
+                              <InAppIcons.Facebook className="w-3 h-3" />
+                            ) : sampleUaBrowser === 'Instagram' ? (
+                              <InAppIcons.Instagram className="w-3 h-3" />
+                            ) : sampleUaDevice === 'iPhone' ? (
+                              <BrowserIcons.Safari className="w-3 h-3" />
+                            ) : (
+                              <BrowserIcons.Chrome className="w-3 h-3" />
+                            )}
+                            <span>
+                              {sampleUaDevice} · {sampleUaDevice === 'iPhone' && sampleUaBrowser === 'Chrome' ? 'Safari' : sampleUaBrowser} (v{sampleUaVersion})
+                            </span>
+                          </span>
+                          <span className="text-emerald-400 shrink-0">Language-Free</span>
                         </div>
                         <p className="text-slate-200 select-all">{getLiveSampleUA()}</p>
                         <button
                           onClick={() => copyLiveSample(getLiveSampleUA())}
-                          className="mt-3 text-xs font-sans font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 cursor-pointer transition-colors"
+                          className="mt-3 text-xs font-sans font-bold text-violet-300 hover:text-slate-100 flex items-center gap-1.5 cursor-pointer transition-colors"
                         >
                           {isCopied ? (
                             <>
                               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                              <span className="text-emerald-400">Copied to Clipboard!</span>
+                              <span className="text-emerald-400">Copied to Clipboard</span>
                             </>
                           ) : (
                             <>
@@ -433,35 +564,35 @@ export const HomePage: React.FC = () => {
                   {heroTab === 'lead' && (
                     <motion.div
                       key="lead"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
+                      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                      transition={{ duration: 0.22, ease: EASE }}
                       className="space-y-3 text-xs"
                     >
-                      <div className="p-4 rounded-2xl border border-white/10 bg-slate-950 space-y-2.5 shadow-inner">
+                      <div className="p-4 rounded-2xl border border-slate-800 bg-slate-950/95 space-y-2.5 shadow-inner">
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-400">Full Name:</span>
-                          <span className="font-bold text-white">David Miller (Test Lead)</span>
+                          <span className="text-slate-400">Full Name</span>
+                          <span className="font-bold text-slate-100">David Miller (Test Lead)</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-400">Gender & Target GEO:</span>
-                          <span className="text-blue-400 font-mono font-semibold">Male · United States</span>
+                          <span className="text-slate-400">Gender & Target GEO</span>
+                          <span className="text-violet-300 font-mono font-semibold">Male · United States</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-400">Simulated Gmail:</span>
+                          <span className="text-slate-400">Gmail Address</span>
                           <span className="font-mono text-slate-200">david.miller.cpa@gmail.com</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-400">Formatted Phone:</span>
-                          <span className="font-mono text-emerald-400 font-bold">+1 (202) 555-0143</span>
+                          <span className="text-slate-400">Formatted Phone</span>
+                          <span className="font-mono text-emerald-400 font-bold tabular-nums">+1 (202) 555-0143</span>
                         </div>
                       </div>
                       <button
                         onClick={() =>
                           copyLiveSample('David Miller, Male, david.miller.cpa@gmail.com, +1 (202) 555-0143, United States')
                         }
-                        className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 cursor-pointer transition-colors"
+                        className="text-xs font-bold text-violet-300 hover:text-slate-100 flex items-center gap-1.5 cursor-pointer transition-colors"
                       >
                         <Copy className="w-4 h-4" />
                         <span>Copy Formatted Test Lead</span>
@@ -472,396 +603,553 @@ export const HomePage: React.FC = () => {
                   {heroTab === 'contact' && (
                     <motion.div
                       key="contact"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
+                      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                      transition={{ duration: 0.22, ease: EASE }}
                       className="space-y-3 text-xs"
                     >
-                      <div className="p-4 rounded-2xl border border-white/10 bg-slate-950 space-y-2.5 font-mono text-xs shadow-inner">
+                      <div className="p-4 rounded-2xl border border-slate-800 bg-slate-950/95 space-y-2.5 font-mono text-xs shadow-inner">
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-400 font-sans">US Mobile:</span>
-                          <span className="text-cyan-400 font-bold">+1 (312) 555-0198</span>
+                          <span className="text-slate-400 font-sans">US Mobile</span>
+                          <span className="text-cyan-400 font-bold tabular-nums">+1 (312) 555-0198</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-400 font-sans">UK Mobile:</span>
-                          <span className="text-cyan-400 font-bold">+44 7911 123456</span>
+                          <span className="text-slate-400 font-sans">UK Mobile</span>
+                          <span className="text-cyan-400 font-bold tabular-nums">+44 7911 123456</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-slate-400 font-sans">Test Mail:</span>
-                          <span className="text-purple-400 font-bold">marketer.us.01@example.com</span>
+                          <span className="text-slate-400 font-sans">Gmail Pool Sample</span>
+                          <span className="text-pink-400 font-bold">marketer.us.01@gmail.com</span>
                         </div>
                       </div>
                       <button
-                        onClick={() => copyLiveSample('+1 (312) 555-0198\n+44 7911 123456\nmarketer.us.01@example.com')}
-                        className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 cursor-pointer transition-colors"
+                        onClick={() => copyLiveSample('+1 (312) 555-0198\n+44 7911 123456\nmarketer.us.01@gmail.com')}
+                        className="text-xs font-bold text-violet-300 hover:text-slate-100 flex items-center gap-1.5 cursor-pointer transition-colors"
                       >
                         <Copy className="w-4 h-4" />
-                        <span>Copy Test Numbers & Email</span>
+                        <span>Copy Numbers & Gmail</span>
                       </button>
                     </motion.div>
                   )}
                 </AnimatePresence>
 
-                {/* Direct Action Link */}
-                <div className="pt-2">
+                <div className="pt-1">
                   <button
-                    onClick={() => navigate('/tools/user-agent-generator')}
-                    className="w-full py-3 rounded-2xl bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-200 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                    onClick={() => {
+                      playUiSound('click');
+                      navigate('/tools/user-agent-generator');
+                    }}
+                    className="btn-premium-vivid w-full py-3.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
                   >
-                    <span>Launch 1,000 UA Batch Generator</span>
+                    <span>Open Batch UA Generator</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
-              </div>
+              </TiltCard>
             </motion.div>
           </div>
-        </div>
-      </section>
 
-      {/* Holographic Telemetry & Metrics Ribbon */}
-      <section className="relative z-10 py-10 border-b border-white/5 bg-slate-900/60 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 lg:gap-8">
-            <div className="p-4 rounded-2xl border border-white/5 bg-slate-950/60 text-center space-y-1">
-              <span className="text-3xl sm:text-4xl font-black text-white font-mono tracking-tight">6+</span>
-              <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Enterprise Tools</p>
-            </div>
-            <div className="p-4 rounded-2xl border border-blue-500/20 bg-blue-950/20 text-center space-y-1">
-              <span className="text-3xl sm:text-4xl font-black text-blue-400 font-mono tracking-tight">1,000</span>
-              <p className="text-xs text-blue-300 font-semibold uppercase tracking-wider">Max Batch Limit</p>
-            </div>
-            <div className="p-4 rounded-2xl border border-amber-500/20 bg-amber-950/20 text-center space-y-1">
-              <span className="text-3xl sm:text-4xl font-black text-amber-400 font-mono tracking-tight">10</span>
-              <p className="text-xs text-amber-300 font-semibold uppercase tracking-wider">Global Tier-1 GEOs</p>
-            </div>
-            <div className="p-4 rounded-2xl border border-emerald-500/20 bg-emerald-950/20 text-center space-y-1">
-              <span className="text-3xl sm:text-4xl font-black text-emerald-400 font-mono tracking-tight">500+</span>
-              <p className="text-xs text-emerald-300 font-semibold uppercase tracking-wider">Starter Package Credits</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* About Section */}
-      <section className="relative z-10 py-24 border-b border-white/5 bg-slate-950">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-5">
-          <span className="text-xs font-bold text-blue-400 uppercase tracking-widest px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20">
-            About ONLINE EARNING IT
-          </span>
-          <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-            {content.aboutTitle || 'Empowering Modern Media Buyers & Arbitrageurs'}
-          </h2>
-          <p className="text-base sm:text-lg text-slate-300 leading-relaxed max-w-3xl mx-auto">
-            {content.aboutText ||
-              'ONLINE EARNING IT was built to eliminate the tedious technical roadblocks faced by performance marketers. From client signatures and lead simulation to text normalization and proxy research, our infrastructure gives you the competitive edge.'}
-          </p>
-        </div>
-      </section>
-
-      {/* Our Services Section (Modern Bento Layout) */}
-      <section id="services" className="relative z-10 py-24 border-b border-white/5 bg-slate-900/40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
-          <div className="text-center space-y-3">
-            <span className="text-xs font-bold text-blue-400 uppercase tracking-widest px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20">
-              Core Capabilities
-            </span>
-            <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-              Our Professional Services
-            </h2>
-            <p className="text-sm text-slate-400 max-w-xl mx-auto">
-              Strategic execution models and specialized toolsets tailored for modern digital media campaigns.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {services.map((s, idx) => (
-              <motion.div
-                key={s.title}
-                whileHover={{ y: -6, scale: 1.015 }}
-                transition={{ duration: 0.2 }}
-                className={`p-7 rounded-3xl border ${s.border} bg-gradient-to-br ${s.accent} bg-slate-900/80 shadow-xl space-y-4 relative group`}
+          {/* Full-Width 4-Column Quantitative Proof Row below Hero Split */}
+          <StaggerGrid className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
+            <StaggerItem>
+              <SpotlightCard className="oe-panel oe-rgb-violet p-5 rounded-2xl text-center space-y-1">
+                <span className="text-3xl sm:text-4xl font-black text-slate-100 font-mono tracking-tight tabular-nums block">
+                  <CountUp value="6+" />
+                </span>
+                <p className="text-xs text-violet-300 font-semibold">Production Web Tools</p>
+              </SpotlightCard>
+            </StaggerItem>
+            <StaggerItem>
+              <SpotlightCard
+                spotlightColor="rgba(236, 72, 153, 0.16)"
+                className="oe-panel oe-rgb-pink p-5 rounded-2xl text-center space-y-1"
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-mono font-black text-slate-500 group-hover:text-blue-400 transition-colors">
-                    {s.num}
-                  </span>
-                  <span className="text-[11px] px-2.5 py-1 rounded-full font-mono font-bold bg-white/10 text-white border border-white/10">
-                    {s.badge}
-                  </span>
-                </div>
-                <h3 className="text-xl font-bold text-white group-hover:text-blue-300 transition-colors">
-                  {s.title}
-                </h3>
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">{s.description}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Available Tools Grid Section */}
-      <section className="relative z-10 py-24 border-b border-white/5 bg-slate-950">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
-            <div className="space-y-3">
-              <span className="text-xs font-bold text-blue-400 uppercase tracking-widest px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20">
-                Production Suite
-              </span>
-              <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-                Available Marketing Tools
-              </h2>
-              <p className="text-sm text-slate-400">
-                High-utility credit-powered processors unlocked with an active package for verified batch generation.
-              </p>
-            </div>
-            <button
-              onClick={() => navigate('/tools')}
-              className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-2 transition-colors cursor-pointer py-2 px-4 rounded-xl border border-blue-500/30 bg-blue-500/10"
-            >
-              <span>Explore All 6 Tools</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {tools.map(tool => (
-              <motion.div
-                key={tool.id}
-                whileHover={{ y: -6 }}
-                transition={{ duration: 0.2 }}
-                className="p-7 rounded-3xl border border-white/10 bg-slate-900/80 hover:border-blue-500/50 hover:bg-slate-900 transition-all shadow-xl flex flex-col justify-between space-y-5 group"
+                <span className="text-3xl sm:text-4xl font-black text-pink-300 font-mono tracking-tight tabular-nums block">
+                  <CountUp value="1,000" />
+                </span>
+                <p className="text-xs text-pink-300/90 font-semibold">Max Batch Output / Run</p>
+              </SpotlightCard>
+            </StaggerItem>
+            <StaggerItem>
+              <SpotlightCard
+                spotlightColor="rgba(245, 158, 11, 0.16)"
+                className="oe-panel oe-rgb-amber p-5 rounded-2xl text-center space-y-1"
               >
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <RealisticToolIcon slug={tool.slug} size="lg" />
-                    <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <span>Ready</span>
-                    </span>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-white group-hover:text-blue-300 transition-colors">
-                      {tool.name}
-                    </h3>
-                    <p className="text-[11px] text-blue-400 uppercase tracking-wider font-bold mt-0.5">
-                      {tool.category}
-                    </p>
-                  </div>
-                  <p className="text-xs text-slate-300 leading-relaxed">{tool.description}</p>
-                </div>
-
-                <button
-                  onClick={() => navigate(`/tools/${tool.slug}`)}
-                  className="w-full py-3 text-xs font-bold rounded-2xl bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md group-hover:shadow-blue-600/30"
-                >
-                  <span>Launch Tool</span>
-                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                </button>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Why Choose Us Section */}
-      <section className="relative z-10 py-24 border-b border-white/5 bg-slate-900/30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
-          <div className="text-center space-y-3">
-            <span className="text-xs font-bold text-blue-400 uppercase tracking-widest px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20">
-              Performance Architecture
-            </span>
-            <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-              Why Choose ONLINE EARNING IT
-            </h2>
-            <p className="text-sm text-slate-400 max-w-xl mx-auto">
-              Engineered by experienced media buyers who understand the demands of high-throughput traffic arbitrage.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-7 rounded-3xl border border-white/10 bg-slate-900/70 space-y-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center shadow-md">
-                <Zap className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-white">Instant Data Processing</h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Generate up to 1,000 user agents, deduplicate 50,000 text lines, or synthesize test leads in under 200 milliseconds.
-              </p>
-            </div>
-
-            <div className="p-7 rounded-3xl border border-white/10 bg-slate-900/70 space-y-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shadow-md">
-                <ShieldCheck className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-white">Exclusive Database Matching</h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Our master database pool marks consumed entries as used per user account, ensuring zero duplication across campaigns.
-              </p>
-            </div>
-
-            <div className="p-7 rounded-3xl border border-white/10 bg-slate-900/70 space-y-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shadow-md">
-                <Layers className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-white">Package & Credit Control</h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Activate Starter, Pro, or Agency credit packages via bKash, Nagad, Rocket, or Binance with transparent per-item credit tracking.
-              </p>
-            </div>
-
-            <div className="p-7 rounded-3xl border border-white/10 bg-slate-900/70 space-y-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shadow-md">
-                <Cpu className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-white">Dual Custom Versioning</h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Select both a Web Browser and an In-App Webview simultaneously with full custom version numbers and verified presets.
-              </p>
-            </div>
-
-            <div className="p-7 rounded-3xl border border-white/10 bg-slate-900/70 space-y-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center shadow-md">
-                <Globe2 className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-white">Android Language-Free Rules</h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Strict adherence to language-free Android specifications so your signatures blend seamlessly across all mobile networks.
-              </p>
-            </div>
-
-            <div className="p-7 rounded-3xl border border-white/10 bg-slate-900/70 space-y-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center shadow-md">
-                <BarChart3 className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-bold text-white">Curated Resources Catalogs</h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Browse hand-picked CPA networks, reliable residential/mobile proxy providers, and top antidetect browser solutions.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Membership Plans Section */}
-      <section id="plans" className="relative z-10 py-24 border-b border-white/5 bg-slate-950">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
-          <div className="text-center space-y-3">
-            <span className="text-xs font-bold text-blue-400 uppercase tracking-widest px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20">
-              Tool Credit Packages
-            </span>
-            <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-              Membership Credit Packages
-            </h2>
-            <p className="text-sm text-slate-400 max-w-xl mx-auto">
-              Choose a credit package to unlock User Agent (1 Cr), Number (2 Cr), Mail (3 Cr), and Lead (5 Cr) generators via bKash, Nagad, Rocket, or Binance. Text Shuffler & Duplicate Remover are free.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {membershipPlans.map(plan => (
-              <motion.div
-                key={plan.name}
-                whileHover={{ y: -8 }}
-                transition={{ duration: 0.2 }}
-                className={`p-7 rounded-3xl border flex flex-col justify-between relative transition-all shadow-xl ${
-                  plan.popular
-                    ? 'border-blue-500/80 bg-gradient-to-b from-blue-950/60 via-slate-900/90 to-slate-950 shadow-2xl shadow-blue-950/50 ring-1 ring-blue-500/60'
-                    : 'border-white/10 bg-slate-900/70 hover:border-white/20'
-                }`}
+                <span className="text-3xl sm:text-4xl font-black text-amber-300 font-mono tracking-tight tabular-nums block">
+                  <CountUp value="58" />
+                </span>
+                <p className="text-xs text-amber-300/90 font-semibold">Supported Global GEOs</p>
+              </SpotlightCard>
+            </StaggerItem>
+            <StaggerItem>
+              <SpotlightCard
+                spotlightColor="rgba(16, 185, 129, 0.16)"
+                className="oe-panel oe-rgb-emerald p-5 rounded-2xl text-center space-y-1"
               >
-                {plan.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[11px] font-bold uppercase tracking-wider shadow-lg">
-                    Recommended Choice
-                  </div>
-                )}
-                <div className="space-y-5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="text-xl font-bold text-white">{plan.name}</h3>
-                      <p className="text-xs text-slate-400 mt-1">{plan.description}</p>
-                    </div>
-                    <span className="shrink-0 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-mono font-bold">
-                      {plan.credits.toLocaleString()} Credits
-                    </span>
-                  </div>
-                  <div className="pt-2 flex items-baseline justify-between">
-                    <div>
-                      <span className="text-4xl font-black text-white font-mono tabular-nums">
-                        {plan.price}
-                      </span>
-                      <span className="text-xs text-slate-400 ml-1.5 font-medium">{plan.period}</span>
-                    </div>
-                    <span className="text-sm font-bold text-amber-400 font-mono">{plan.usdt}</span>
-                  </div>
-                  <div className="space-y-2.5 pt-4 border-t border-white/10">
-                    {plan.features.map(f => (
-                      <div key={f} className="flex items-start gap-2.5 text-xs text-slate-300">
-                        <Check className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                        <span>{f}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="pt-7">
-                  <button
-                    onClick={() => {
-                      if (isAuthenticated) {
-                        navigate('/payment');
-                      } else {
-                        navigate('/signup');
-                      }
-                    }}
-                    className={`w-full py-3 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
-                      plan.popular
-                        ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30'
-                        : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                    }`}
-                  >
-                    Select {plan.name} Package
-                  </button>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+                <span className="text-3xl sm:text-4xl font-black text-emerald-300 font-mono tracking-tight tabular-nums block">
+                  <CountUp value="500+" />
+                </span>
+                <p className="text-xs text-emerald-300/90 font-semibold">Starter Package Credits</p>
+              </SpotlightCard>
+            </StaggerItem>
+          </StaggerGrid>
         </div>
       </section>
 
-      {/* FAQ Section with Smooth AnimatePresence Accordion */}
-      <section className="relative z-10 py-24 border-b border-white/5 bg-slate-900/40">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          <div className="text-center space-y-3">
-            <span className="text-xs font-bold text-blue-400 uppercase tracking-widest px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20">
-              Knowledge Base
-            </span>
-            <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-              Frequently Asked Questions
+      {/* ============================================================
+          02. CLICKABLE TOOL MARQUEE RIBBON
+         ============================================================ */}
+      <section className="relative z-10 py-6 border-b border-slate-800/70 bg-slate-950/70">
+        <Marquee speed={44}>
+          {[...tools, ...tools].map((t, i) => {
+            const isFree = t.slug === 'text-shuffler' || t.slug === 'duplicate-text-remover';
+            return (
+              <button
+                key={`${t.id}-${i}`}
+                type="button"
+                onClick={() => {
+                  playUiSound('click');
+                  navigate(`/tools/${t.slug}`);
+                }}
+                className="oe-panel oe-panel-hover flex items-center gap-3 pl-2.5 pr-5 py-2 rounded-2xl cursor-pointer transition-transform hover:-translate-y-0.5"
+              >
+                <RealisticToolIcon slug={t.slug} size="sm" />
+                <span className="text-xs font-bold text-slate-100 whitespace-nowrap">{t.name}</span>
+                <span className="text-[11px] text-slate-500" aria-hidden="true">·</span>
+                <span className={`text-[10px] font-mono font-bold whitespace-nowrap ${isFree ? 'text-emerald-400' : 'text-violet-300'}`}>
+                  {isFree ? 'Free' : 'Pool'}
+                </span>
+              </button>
+            );
+          })}
+        </Marquee>
+      </section>
+
+      {/* ============================================================
+          03. 3D INTERACTIVE ORBITAL TOOL SHOWCASE
+         ============================================================ */}
+      <section className="relative z-10 pt-20 pb-12 border-b border-slate-800/70 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+          <div className="text-center space-y-3 max-w-2xl mx-auto">
+            <p className="text-xs font-bold text-violet-300 tracking-wide">
+              Interactive 3D Ring · Click Any Tool to Launch
+            </p>
+            <h2 data-rw className="font-display text-3xl sm:text-5xl font-black text-slate-100 tracking-tight text-balance">
+              <RevealWords text="Six Tools. One Unified Studio." />
             </h2>
             <p className="text-sm text-slate-400">
-              Clear answers regarding platform operations, generator data, and resources.
+              Sweep your cursor left or right to steer the orbital ring. Two core utilities remain 100% free forever.
             </p>
           </div>
+          <ToolCarousel3D
+            tools={tools}
+            onOpen={slug => {
+              playUiSound('click');
+              navigate(`/tools/${slug}`);
+            }}
+          />
+        </div>
+      </section>
 
-          <div className="space-y-4">
+      {/* ============================================================
+          04. ASYMMETRIC BENTO CAPABILITIES (01–06)
+         ============================================================ */}
+      <section id="services" className="relative z-10 py-24 border-b border-slate-800/70 bg-slate-900/30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+          <Reveal className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="space-y-2.5 max-w-2xl">
+              <p className="text-xs font-bold text-violet-300 tracking-wide">
+                Core Capabilities · Editorial Matrix
+              </p>
+              <h2 data-rw className="font-display text-3xl sm:text-5xl font-black text-slate-100 tracking-tight text-balance">
+                <RevealWords text="Built for High-Throughput Campaigns" />
+              </h2>
+            </div>
+            <p className="text-sm text-slate-400 max-w-md">
+              Strategic traffic acquisition models paired with strict pool isolation and instant multi-format exports.
+            </p>
+          </Reveal>
+
+          <StaggerGrid className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-5">
+            {bentoCapabilities.map(item => (
+              <StaggerItem key={item.num} className={item.span}>
+                <SpotlightCard
+                  spotlightColor={item.spotlight}
+                  onClick={() => {
+                    playUiSound('click');
+                    navigate(item.href);
+                  }}
+                  whileHover={{ y: -4 }}
+                  transition={{ duration: 0.18, ease: EASE }}
+                  className={`oe-panel oe-panel-hover ${item.rgbClass} h-full p-7 rounded-3xl cursor-pointer`}
+                >
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-3 text-xs text-slate-400">
+                      <span className="font-mono font-bold text-violet-300">
+                        {item.num}. <span className="text-slate-400 font-sans font-medium ml-1">{item.category}</span>
+                      </span>
+                      <ArrowUpRight className="w-4 h-4 text-slate-500 group-hover/spot:text-violet-300 group-hover/spot:translate-x-0.5 group-hover/spot:-translate-y-0.5 transition-all" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-100 group-hover/spot:text-violet-300 transition-colors">
+                      {item.title}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">{item.description}</p>
+                  </div>
+                  <div className="pt-5 mt-5 border-t border-slate-800/70 flex items-center justify-between text-xs font-semibold text-violet-300">
+                    <span>{item.cta}</span>
+                    <ArrowRight className="w-3.5 h-3.5 group-hover/spot:translate-x-1 transition-transform" />
+                  </div>
+                </SpotlightCard>
+              </StaggerItem>
+            ))}
+          </StaggerGrid>
+        </div>
+      </section>
+
+      {/* ============================================================
+          05. SCROLL-PARALLAX COMMAND WORKBENCH SHOWCASE
+         ============================================================ */}
+      <section className="relative z-10 py-20 border-b border-slate-800/70 bg-slate-950">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Reveal className="oe-panel oe-rgb-violet rounded-3xl p-6 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch overflow-hidden relative">
+            <div className="lg:col-span-6 flex flex-col justify-between space-y-6">
+              <div className="space-y-4">
+                <p className="text-xs font-bold text-violet-300 tracking-wide">
+                  Command Workbench · Live Architecture
+                </p>
+                <h2 className="font-display text-2xl sm:text-4xl font-black text-slate-100 tracking-tight leading-tight text-balance">
+                  Precision Filtering with Zero Pool Overlap
+                </h2>
+                <p className="text-sm text-slate-300 leading-relaxed">
+                  {content.aboutText ||
+                    'ONLINE EARNING IT eliminates manual data cleanup for performance marketers. Combine dual browser and in-app webview signatures, filter @gmail.com and regional lead pools, and export verified batches with zero repetition.'}
+                </p>
+              </div>
+
+              <div className="divide-y divide-slate-800/80 border-y border-slate-800/80">
+                <div className="py-3.5 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2.5">
+                    <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="text-xs font-bold text-slate-100">Permanent Pool Cut Engine</span>
+                  </div>
+                  <span className="text-xs text-slate-400 font-mono">100% Unique Delivery</span>
+                </div>
+                <div className="py-3.5 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2.5">
+                    <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span className="text-xs font-bold text-slate-100">5-Version Matrix Cycling</span>
+                  </div>
+                  <span className="text-xs text-slate-400 font-mono">Parallel Browser & In-App</span>
+                </div>
+                <div className="py-3.5 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2.5">
+                    <Layers className="w-4 h-4 text-cyan-400 shrink-0" />
+                    <span className="text-xs font-bold text-slate-100">Multi-Domain & GEO Filtering</span>
+                  </div>
+                  <span className="text-xs text-slate-400 font-mono">@gmail.com · 58 Countries</span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => {
+                    playUiSound('click');
+                    navigate(isAuthenticated ? '/dashboard' : '/signup');
+                  }}
+                  className="btn-premium-primary px-6 py-3 rounded-xl text-xs font-bold inline-flex items-center gap-2 cursor-pointer whitespace-nowrap"
+                >
+                  <span>{isAuthenticated ? 'Open Studio Dashboard' : 'Start Free Account'}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    playUiSound('click');
+                    navigate('/resources');
+                  }}
+                  className="btn-premium-glass px-5 py-3 rounded-xl text-xs inline-flex items-center gap-2 cursor-pointer whitespace-nowrap"
+                >
+                  <Globe2 className="w-4 h-4 text-cyan-400" />
+                  <span>Explore Resources</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="lg:col-span-6 flex">
+              <div className="rounded-2xl overflow-hidden border border-violet-500/30 shadow-[0_24px_60px_-20px_rgba(var(--oe-accent-rgb),0.45)] relative w-full min-h-[280px] lg:h-full">
+                <ScrollParallaxMedia className="w-full h-full">
+                  <img
+                    src={heroPreviewImg}
+                    alt="ONLINE EARNING IT Marketing Command Studio"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                  />
+                </ScrollParallaxMedia>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
+                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between px-4 py-2.5 rounded-xl bg-black/75 backdrop-blur-md border border-white/15 text-[11px]">
+                  <span className="font-mono text-white font-semibold">Live Credit & Pool Console</span>
+                  <span className="text-emerald-400 font-bold">Realtime Supabase Sync</span>
+                </div>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ============================================================
+          06. FILTERABLE PRODUCTION TOOLS MATRIX
+         ============================================================ */}
+      <section id="tools-showcase" className="relative z-10 py-24 border-b border-slate-800/70 bg-slate-900/25">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+          <Reveal className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+            <div className="space-y-2.5">
+              <p className="text-xs font-bold text-violet-300 tracking-wide">
+                Production Suite · 6 Interactive Tools
+              </p>
+              <h2 data-rw className="font-display text-3xl sm:text-5xl font-black text-slate-100 tracking-tight text-balance">
+                <RevealWords text="Available Marketing Tools" />
+              </h2>
+              <p className="text-sm text-slate-400">
+                Filter between pool-synced generators and instant free text normalization utilities.
+              </p>
+            </div>
+
+            {/* Interactive Segmented Filter Control */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex items-center gap-1 p-1 rounded-2xl bg-slate-950/90 border border-slate-800 text-xs">
+                {[
+                  { id: 'all' as const, label: 'All 6 Tools' },
+                  { id: 'pool' as const, label: 'Pool Generators' },
+                  { id: 'free' as const, label: 'Free Utilities' },
+                ].map(tab => {
+                  const active = toolFilter === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => {
+                        playUiSound('click');
+                        setToolFilter(tab.id);
+                      }}
+                      className={`relative px-3.5 py-2 rounded-xl font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                        active ? 'text-white' : 'text-slate-400 hover:text-slate-100'
+                      }`}
+                    >
+                      {active && (
+                        <motion.div
+                          layoutId="tools-filter-pill"
+                          className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 shadow"
+                          transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                        />
+                      )}
+                      <span className="relative z-10">{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={() => {
+                  playUiSound('click');
+                  navigate('/tools');
+                }}
+                className="btn-premium-glass text-xs font-bold text-violet-200 flex items-center gap-2 cursor-pointer py-2.5 px-4 rounded-xl whitespace-nowrap shrink-0"
+              >
+                <span>All Directory</span>
+                <ArrowRight className="w-3.5 h-3.5 text-violet-400" />
+              </button>
+            </div>
+          </Reveal>
+
+          <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <AnimatePresence mode="popLayout">
+              {filteredTools.map(tool => {
+                const isFree = tool.slug === 'text-shuffler' || tool.slug === 'duplicate-text-remover';
+                return (
+                  <motion.div
+                    layout
+                    key={tool.id}
+                    initial={{ opacity: 0, scale: 0.96, y: 16 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.3, ease: EASE }}
+                  >
+                    <TiltCard max={6} className="h-full">
+                      <SpotlightCard className="oe-panel oe-panel-hover h-full p-7 rounded-3xl">
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <RealisticToolIcon slug={tool.slug} size="lg" />
+                            <div className="text-right text-[11px] font-mono">
+                              <span className={isFree ? 'text-emerald-400 font-bold' : 'text-cyan-400 font-bold'}>
+                                {isFree ? '100% Free' : 'Pool Synced'}
+                              </span>
+                              <span className="block text-slate-500 text-[10px]">{tool.category}</span>
+                            </div>
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-bold text-slate-100 group-hover/spot:text-violet-300 transition-colors">
+                              {tool.name}
+                            </h3>
+                          </div>
+                          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">{tool.description}</p>
+                        </div>
+
+                        <div className="pt-6">
+                          <button
+                            onClick={() => {
+                              playUiSound('click');
+                              navigate(`/tools/${tool.slug}`);
+                            }}
+                            className="btn-premium-primary w-full py-3 text-xs font-bold rounded-2xl flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
+                          >
+                            <span>Launch Tool</span>
+                            <ArrowRight className="w-3.5 h-3.5 group-hover/spot:translate-x-1 transition-transform" />
+                          </button>
+                        </div>
+                      </SpotlightCard>
+                    </TiltCard>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ============================================================
+          07. MEMBERSHIP CREDIT PACKAGES
+         ============================================================ */}
+      <section id="pricing-section" className="relative z-10 py-24 border-b border-slate-800/70 bg-slate-950">
+        <div id="plans" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
+          <Reveal className="text-center space-y-3">
+            <p className="text-xs font-bold text-violet-300 tracking-wide">
+              Tool Credit Packages · Instant Activation
+            </p>
+            <h2 data-rw className="font-display text-3xl sm:text-5xl font-black text-slate-100 tracking-tight text-balance">
+              <RevealWords text="Membership Credit Packages" />
+            </h2>
+            <p className="text-sm text-slate-400 max-w-xl mx-auto">
+              Unlock User Agent (1 Cr), Number (2 Cr), Mail (3 Cr), and Lead (5 Cr) pools via bKash, Nagad, Rocket, or Binance. Text Shuffler & Duplicate Remover remain free.
+            </p>
+          </Reveal>
+
+          <StaggerGrid className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {membershipPlans.map(plan => (
+              <StaggerItem key={plan.name}>
+                <SpotlightCard
+                  whileHover={{ y: -6 }}
+                  transition={{ duration: 0.2, ease: EASE }}
+                  className={`oe-panel h-full p-7 rounded-3xl relative transition-all ${
+                    plan.popular
+                      ? 'oe-rgb-violet ring-1 ring-violet-500/60 bg-violet-500/5 dark:bg-gradient-to-b dark:from-violet-950/50 dark:via-slate-900/95 dark:to-slate-950'
+                      : 'oe-panel-hover'
+                  }`}
+                >
+                  <div className="space-y-5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2 text-xs font-mono mb-1">
+                          <span className="text-amber-400 font-bold tabular-nums">
+                            {plan.credits.toLocaleString()} Credits
+                          </span>
+                          {plan.popular && (
+                            <>
+                              <span aria-hidden="true" className="text-slate-600">·</span>
+                              <span className="text-violet-300 font-bold">Most Popular</span>
+                            </>
+                          )}
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-100">{plan.name}</h3>
+                        <p className="text-xs text-slate-400 mt-1">{plan.description}</p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex items-baseline justify-between">
+                      <div>
+                        <span className="text-4xl font-black text-slate-100 font-mono tabular-nums">
+                          {plan.price}
+                        </span>
+                        <span className="text-xs text-slate-400 ml-1.5 font-medium">{plan.period}</span>
+                      </div>
+                      <span className="text-sm font-bold text-amber-500 dark:text-amber-400 font-mono tabular-nums">
+                        {plan.usdt}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2.5 pt-4 border-t border-slate-800/80">
+                      {plan.features.map(f => (
+                        <div key={f} className="flex items-start gap-2.5 text-xs text-slate-300">
+                          <Check className="w-4 h-4 text-violet-400 shrink-0 mt-0.5" />
+                          <span>{f}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-7">
+                    <button
+                      onClick={() => {
+                        playUiSound('click');
+                        navigate(isAuthenticated ? `/payment?pkg=${plan.id}` : '/signup');
+                      }}
+                      className={`w-full py-3.5 rounded-2xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        plan.popular ? 'btn-premium-vivid' : 'btn-premium-glass'
+                      }`}
+                    >
+                      Select {plan.name}
+                    </button>
+                  </div>
+                </SpotlightCard>
+              </StaggerItem>
+            ))}
+          </StaggerGrid>
+        </div>
+      </section>
+
+      {/* ============================================================
+          08. FAQ KNOWLEDGE BASE
+         ============================================================ */}
+      <section className="relative z-10 py-24 border-b border-slate-800/70 bg-slate-900/30">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+          <Reveal className="text-center space-y-3">
+            <p className="text-xs font-bold text-violet-300 tracking-wide">
+              Knowledge Base · Clear Operations
+            </p>
+            <h2 data-rw className="font-display text-3xl sm:text-5xl font-black text-slate-100 tracking-tight text-balance">
+              <RevealWords text="Frequently Asked Questions" />
+            </h2>
+            <p className="text-sm text-slate-400">
+              Platform workflows, generator pool cutting, @gmail.com filtering, and credit activation.
+            </p>
+          </Reveal>
+
+          <div className="space-y-3.5">
             {faqs.map((faq, idx) => {
               const isOpen = openFaq === idx;
               return (
                 <div
                   key={faq.q}
-                  className="border border-white/10 rounded-2xl bg-slate-900/80 overflow-hidden transition-colors hover:border-slate-700"
+                  className={`oe-panel rounded-2xl overflow-hidden transition-all ${
+                    isOpen ? 'oe-rgb-violet' : 'hover:border-violet-500/30'
+                  }`}
                 >
                   <button
-                    onClick={() => setOpenFaq(isOpen ? null : idx)}
-                    className="w-full p-5 text-left flex items-center justify-between gap-4 text-sm font-bold text-slate-200 hover:text-white transition-colors cursor-pointer"
+                    onClick={() => {
+                      playUiSound('click');
+                      setOpenFaq(isOpen ? null : idx);
+                    }}
+                    className="w-full p-5 text-left flex items-center justify-between gap-4 text-sm font-bold text-slate-100 hover:text-violet-300 transition-colors cursor-pointer"
                   >
-                    <span>{faq.q}</span>
+                    <span className="flex items-center gap-3">
+                      <span className="text-xs font-mono text-violet-400">0{idx + 1}.</span>
+                      <span>{faq.q}</span>
+                    </span>
                     <motion.div
                       animate={{ rotate: isOpen ? 180 : 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="shrink-0 text-slate-400"
+                      transition={{ duration: 0.22, ease: EASE }}
+                      className="shrink-0 text-violet-400"
                     >
-                      <ChevronDown className="w-4 h-4 text-blue-400" />
+                      <ChevronDown className="w-4 h-4" />
                     </motion.div>
                   </button>
                   <AnimatePresence initial={false}>
@@ -870,9 +1158,9 @@ export const HomePage: React.FC = () => {
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.25, ease: 'easeInOut' }}
+                        transition={{ duration: 0.25, ease: EASE }}
                       >
-                        <div className="px-5 pb-5 pt-1 text-xs sm:text-sm text-slate-300 leading-relaxed border-t border-white/5">
+                        <div className="px-5 pb-5 pt-2 text-xs sm:text-sm text-slate-300 leading-relaxed border-t border-slate-800/70">
                           {faq.a}
                         </div>
                       </motion.div>
@@ -885,105 +1173,123 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* Contact Section */}
-      <section className="relative z-10 py-24 bg-slate-950">
+      {/* ============================================================
+          09. INTERACTIVE LEAD & INQUIRY STUDIO
+         ============================================================ */}
+      <section id="contact-section" className="relative z-10 py-24 bg-slate-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-6">
+            <Reveal className="space-y-6">
               <div>
-                <span className="text-xs font-bold text-blue-400 uppercase tracking-widest px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20">
-                  Direct Inquiries
-                </span>
-                <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight mt-2">
-                  Connect with the Team
+                <p className="text-xs font-bold text-violet-300 tracking-wide">
+                  Direct Inquiries · Dedicated Support
+                </p>
+                <h2 data-rw className="font-display text-3xl sm:text-5xl font-black text-slate-100 tracking-tight mt-2 text-balance">
+                  <RevealWords text="Connect with the Team" />
                 </h2>
-                <p className="text-sm text-slate-300 mt-2 leading-relaxed">
-                  Have questions about our tools, custom CPA arbitrage setups, or enterprise data feeds? Drop us a message or contact our official channels.
+                <p className="text-sm text-slate-300 mt-3 leading-relaxed">
+                  Questions about tool pools, bulk @gmail.com data uploads, CPA workflows, or enterprise packages? Send an inquiry directly to our desk.
                 </p>
               </div>
 
               <div className="space-y-3 text-xs text-slate-300">
-                <div className="flex items-center gap-3.5 p-5 rounded-2xl border border-white/10 bg-slate-900/60">
-                  <Mail className="w-5 h-5 text-blue-400 shrink-0" />
-                  <div>
-                    <span className="block text-[10px] text-slate-400 uppercase font-bold">Email Address</span>
-                    <span className="text-white font-medium">{content.contactEmail}</span>
+                <SpotlightCard className="oe-panel oe-rgb-violet p-5 rounded-2xl">
+                  <div className="flex items-center gap-3.5">
+                    <Mail className="w-5 h-5 text-violet-400 shrink-0" />
+                    <div>
+                      <span className="block text-[11px] text-slate-400 font-semibold">Email Address</span>
+                      <span className="text-slate-100 font-medium">{content.contactEmail}</span>
+                    </div>
                   </div>
-                </div>
+                </SpotlightCard>
 
-                <div className="flex items-center gap-3.5 p-5 rounded-2xl border border-white/10 bg-slate-900/60">
-                  <PhoneCall className="w-5 h-5 text-blue-400 shrink-0" />
-                  <div>
-                    <span className="block text-[10px] text-slate-400 uppercase font-bold">Phone Support</span>
-                    <span className="text-white font-medium">{content.contactPhone}</span>
+                <SpotlightCard
+                  spotlightColor="rgba(16, 185, 129, 0.16)"
+                  className="oe-panel oe-rgb-emerald p-5 rounded-2xl"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <PhoneCall className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <div>
+                      <span className="block text-[11px] text-slate-400 font-semibold">Phone Support</span>
+                      <span className="text-slate-100 font-medium font-mono tabular-nums">{content.contactPhone}</span>
+                    </div>
                   </div>
-                </div>
+                </SpotlightCard>
 
-                <div className="flex items-center gap-3.5 p-5 rounded-2xl border border-white/10 bg-slate-900/60">
-                  <Send className="w-5 h-5 text-blue-400 shrink-0" />
-                  <div>
-                    <span className="block text-[10px] text-slate-400 uppercase font-bold">Telegram Official Channel</span>
-                    <a
-                      href={content.socialLinks?.telegram || 'https://t.me/OnlineEarningIT'}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-blue-400 hover:underline flex items-center gap-1 font-semibold"
-                    >
-                      <span>{content.contactTelegram}</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
+                <SpotlightCard
+                  spotlightColor="rgba(6, 182, 212, 0.16)"
+                  className="oe-panel oe-rgb-cyan p-5 rounded-2xl"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <Send className="w-5 h-5 text-cyan-400 shrink-0" />
+                    <div>
+                      <span className="block text-[11px] text-slate-400 font-semibold">Telegram Official Channel</span>
+                      <a
+                        href={content.socialLinks?.telegram || 'https://t.me/OnlineEarningIT'}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-cyan-300 hover:underline flex items-center gap-1 font-semibold"
+                      >
+                        <span>{content.contactTelegram}</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
                   </div>
-                </div>
+                </SpotlightCard>
               </div>
-            </div>
+            </Reveal>
 
             {/* Contact Form */}
-            <div className="p-7 sm:p-9 rounded-3xl border border-blue-500/30 bg-gradient-to-b from-slate-900 via-slate-900/90 to-slate-950 shadow-2xl space-y-5">
-              <h3 className="text-lg font-bold text-white">Send an Instant Message</h3>
-              <form onSubmit={handleContactSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">Your Full Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={contactName}
-                    onChange={e => setContactName(e.target.value)}
-                    placeholder="e.g. Alex Johnson"
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-white/10 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500 transition-colors"
-                  />
+            <Reveal delay={0.12}>
+              <SpotlightCard className="oe-panel oe-rgb-violet p-7 sm:p-9 rounded-3xl">
+                <div className="space-y-5">
+                  <h3 className="text-lg font-bold text-slate-100">Send an Instant Message</h3>
+                  <form onSubmit={handleContactSubmit} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">Your Full Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={contactName}
+                        onChange={e => setContactName(e.target.value)}
+                        placeholder="e.g. Alex Johnson"
+                        className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder:text-slate-500 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">Your Gmail Address</label>
+                      <input
+                        type="email"
+                        required
+                        value={contactEmail}
+                        onChange={e => setContactEmail(e.target.value)}
+                        placeholder="alex@gmail.com"
+                        className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder:text-slate-500 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1.5">Your Message</label>
+                      <textarea
+                        rows={4}
+                        required
+                        value={contactMsg}
+                        onChange={e => setContactMsg(e.target.value)}
+                        placeholder="Describe your inquiry, project scope, or feedback..."
+                        className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder:text-slate-500 transition-colors resize-none"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={submittingContact}
+                      className="btn-premium-vivid w-full py-3.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      <span>{submittingContact ? 'Sending...' : 'Send Message'}</span>
+                    </button>
+                  </form>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">Your Gmail Address</label>
-                  <input
-                    type="email"
-                    required
-                    value={contactEmail}
-                    onChange={e => setContactEmail(e.target.value)}
-                    placeholder="alex@gmail.com"
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-white/10 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500 transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">Your Message</label>
-                  <textarea
-                    rows={4}
-                    required
-                    value={contactMsg}
-                    onChange={e => setContactMsg(e.target.value)}
-                    placeholder="Describe your inquiry, project scope, or feedback..."
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-white/10 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500 transition-colors resize-none"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={submittingContact}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  <span>{submittingContact ? 'Sending...' : 'Send Message'}</span>
-                </button>
-              </form>
-            </div>
+              </SpotlightCard>
+            </Reveal>
           </div>
         </div>
       </section>

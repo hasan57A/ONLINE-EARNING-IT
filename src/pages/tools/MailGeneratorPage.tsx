@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useRouter } from '../../context/RouterContext';
 import { useToast } from '../../components/ui/Toast';
 import { db, TOOL_CREDIT_COSTS } from '../../services/db';
+import { playUiSound } from '../../services/sound';
 import {
   Mail,
   Copy,
   Download,
   Bookmark,
   RefreshCw,
-  Info,
   Check,
   Layers,
   AtSign,
@@ -17,9 +18,9 @@ import {
   Terminal,
   Database,
   Scissors,
-  CheckCircle2,
   Search,
   Globe2,
+  Sparkles,
 } from 'lucide-react';
 import { RealisticToolIcon } from '../../components/ui/RealisticIcon';
 import { motion, AnimatePresence } from 'motion/react';
@@ -29,25 +30,42 @@ import { PackageCreditGuard } from '../../components/ui/PackageCreditGuard';
 
 export const MailGeneratorPage: React.FC = () => {
   const { user, refreshUser } = useAuth();
+  const { navigate } = useRouter();
   const { showToast } = useToast();
   useDbSync();
 
-  const [country, setCountry] = useState<string>('All Countries');
+  const prefs = db.getUserPreferences();
+  const [country, setCountry] = useState<string>(() => prefs.defaultCountry || 'All Countries');
   const [countrySearch, setCountrySearch] = useState<string>('');
-  const [quantity, setQuantity] = useState<number>(20);
+  const [selectedDomain, setSelectedDomain] = useState<'all' | 'gmail.com' | 'outlook.com' | 'country'>('all');
+  const [quantity, setQuantity] = useState<number>(() => Math.min(100, Math.max(1, prefs.defaultQuantity || 20)));
   const [viewMode, setViewMode] = useState<'cards' | 'raw'>('cards');
-
   const [mails, setMails] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [fromPool, setFromPool] = useState(0);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
+  const selectedConfig = findCountryGeo(country);
+  const resolvedDomain = selectedDomain === 'country' ? selectedConfig.domain : selectedDomain;
+  const activeDomainDisplay = selectedDomain === 'all' ? 'gmail.com' : resolvedDomain;
+
   const mailsPool = db.getMails();
+  const availablePoolEntries = mailsPool.filter(m => !m.used);
   const poolTotal = mailsPool.length;
   const poolConsumed = mailsPool.filter(m => m.used).length;
-  const poolAvailable = poolTotal - poolConsumed;
+  const poolAvailable = availablePoolEntries.length;
+  const gmailAvailable = availablePoolEntries.filter(m => m.email.toLowerCase().endsWith('@gmail.com')).length;
+  const outlookAvailable = availablePoolEntries.filter(m => m.email.toLowerCase().endsWith('@outlook.com')).length;
+  const countryDomainAvailable = availablePoolEntries.filter(m =>
+    m.email.toLowerCase().endsWith(`@${selectedConfig.domain.toLowerCase()}`)
+  ).length;
+  const filteredPoolAvailable =
+    selectedDomain === 'all'
+      ? poolAvailable
+      : availablePoolEntries.filter(m => m.email.toLowerCase().endsWith(`@${resolvedDomain.toLowerCase()}`)).length;
+
   const requestedQty = Math.min(100, Math.max(1, Number(quantity) || 1));
-  const effectiveItemsCount = poolAvailable > 0 ? Math.min(poolAvailable, requestedQty) : requestedQty;
+  const effectiveItemsCount = filteredPoolAvailable > 0 ? Math.min(filteredPoolAvailable, requestedQty) : requestedQty;
   const effectiveCreditsNeeded = effectiveItemsCount * TOOL_CREDIT_COSTS.MAIL;
   const creditAccess = db.canUseTool(user?.id, effectiveCreditsNeeded);
 
@@ -58,12 +76,9 @@ export const MailGeneratorPage: React.FC = () => {
       c.name.toLowerCase().includes(q) ||
       c.code.toLowerCase().includes(q) ||
       c.domain.toLowerCase().includes(q) ||
-      c.locale.toLowerCase().includes(q) ||
-      c.languageName.toLowerCase().includes(q)
+      c.locale.toLowerCase().includes(q)
     );
   });
-
-  const selectedConfig = findCountryGeo(country);
 
   const handleGenerate = () => {
     if (!user) {
@@ -76,18 +91,27 @@ export const MailGeneratorPage: React.FC = () => {
       return;
     }
 
-    const qty = Math.min(poolAvailable, Math.min(100, Math.max(1, Number(quantity) || 1)));
+    if (filteredPoolAvailable === 0) {
+      showToast(
+        `No @${resolvedDomain} emails available in Admin Pool. Upload @${resolvedDomain} emails in Admin Panel or select All Domains.`,
+        'error'
+      );
+      return;
+    }
+
+    const qty = Math.min(filteredPoolAvailable, Math.min(100, Math.max(1, Number(quantity) || 1)));
     const creditsRequired = qty * TOOL_CREDIT_COSTS.MAIL;
     const access = db.canUseTool(user.id, creditsRequired);
     if (!access.allowed) {
       showToast(access.reason || 'Active package and credits are required to generate Emails.', 'error');
+      if (!access.hasUsablePackage) navigate('/payment');
       return;
     }
 
     setIsGenerating(true);
 
     try {
-      const { results, fromPoolCount, error } = db.consumeMails(user.id, country, qty);
+      const { results, fromPoolCount, error } = db.consumeMails(user.id, country, qty, resolvedDomain);
       if (error || results.length === 0) {
         showToast(error || 'No available Emails found in Admin Database Pool.', 'error');
         setIsGenerating(false);
@@ -97,14 +121,20 @@ export const MailGeneratorPage: React.FC = () => {
       setMails(results);
       setFromPool(fromPoolCount);
       refreshUser();
+      playUiSound('generate');
 
+      if (db.getUserPreferences().autoCopyAfterGenerate) {
+        navigator.clipboard.writeText(results.join('\n'));
+      }
+
+      const domainTag = selectedDomain === 'all' ? 'All Domains' : `@${resolvedDomain}`;
       db.recordUsage(
         user.id,
         'mail-generator',
         'Mail Generator',
         results.length,
         'Success',
-        `${country} · ${results.length} emails`
+        `${country} · ${domainTag} · ${results.length} emails`
       );
 
       showToast(
@@ -122,6 +152,7 @@ export const MailGeneratorPage: React.FC = () => {
 
   const copySingle = (email: string, idx: number) => {
     navigator.clipboard.writeText(email);
+    playUiSound('copy');
     setCopiedIndex(idx);
     showToast(`Copied ${email}`, 'success');
     setTimeout(() => setCopiedIndex(null), 1800);
@@ -130,448 +161,398 @@ export const MailGeneratorPage: React.FC = () => {
   const copyAll = () => {
     if (mails.length === 0) return;
     navigator.clipboard.writeText(mails.join('\n'));
-    showToast('Copied all test emails to clipboard!', 'success');
+    playUiSound('copy');
+    showToast('Copied all emails to clipboard!', 'success');
   };
+
+  const outputFormat = db.getUserPreferences().defaultOutputFormat || 'TXT';
 
   const downloadTxt = () => {
     if (mails.length === 0) return;
-    const blob = new Blob([mails.join('\n')], { type: 'text/plain;charset=utf-8' });
+    let body = mails.join('\n');
+    let mime = 'text/plain;charset=utf-8';
+    const ext = outputFormat.toLowerCase();
+    if (outputFormat === 'CSV') {
+      body = 'Email,Country\n' + mails.map(m => `"${m}","${country}"`).join('\n');
+      mime = 'text/csv;charset=utf-8';
+    } else if (outputFormat === 'JSON') {
+      body = JSON.stringify(mails.map(email => ({ email, country })), null, 2);
+      mime = 'application/json;charset=utf-8';
+    }
+    const blob = new Blob([body], { type: mime });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `test_emails_${country.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}.txt`;
+    link.download = `emails_${country.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}.${ext}`;
     link.click();
     URL.revokeObjectURL(url);
-    showToast('Downloaded email addresses TXT file.', 'success');
+    playUiSound('copy');
+    showToast(`Downloaded email addresses ${outputFormat} file.`, 'success');
   };
 
   const saveResults = () => {
     if (!user || mails.length === 0) return;
-    const title = `Test Emails (${country} · ${mails.length} addresses)`;
     db.saveResult(
       user.id,
       'mail-generator',
       'Mail Generator',
-      title,
+      `Test Emails (${country} · ${mails.length} addresses)`,
       mails.join('\n'),
       mails.length
     );
-    showToast('Saved results to your dashboard!', 'success');
+    playUiSound('generate');
+    showToast('Saved results to your dashboard vault!', 'success');
   };
 
   return (
-    <div className="space-y-8">
-      {/* Hero Header */}
-      <div className="relative overflow-hidden rounded-3xl border border-purple-500/20 bg-gradient-to-r from-purple-950/40 via-slate-900/90 to-fuchsia-950/40 p-6 sm:p-8 backdrop-blur-xl shadow-2xl">
-        <div className="absolute -right-20 -top-20 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="flex items-center gap-5">
-            <RealisticToolIcon slug="mail-generator" size="lg" />
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wider text-purple-400">
-                <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20">
-                  <Mail className="w-3 h-3 text-purple-400" />
-                  Admin Pool Synchronized
-                </span>
-                <span className="text-slate-600 dark:text-slate-500">·</span>
-                <span className="text-emerald-400 font-mono text-[11px]">All Countries & GEO Languages</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                Mail Generator
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-2xl leading-relaxed">
-                Strictly pulls verified email addresses uploaded in the Admin Panel and permanently cuts consumed entries to prevent duplicate issuance.
-              </p>
+    <div className="space-y-6">
+      <div className="oe-panel rounded-3xl p-6 sm:p-7 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+        <div className="flex items-center gap-4">
+          <RealisticToolIcon slug="mail-generator" size="lg" />
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
+              <span className="px-2.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                Admin Pool Synchronized
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-400/30 font-mono">
+                3 Credits / Email
+              </span>
             </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-100 tracking-tight flex items-center gap-2">
+              <span>Mail Generator</span>
+              <Sparkles className="w-5 h-5 text-violet-400" />
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-400 max-w-2xl">
+              Pull verified email records from the synced Admin database pool and retire consumed entries permanently.
+            </p>
           </div>
+        </div>
 
-          {/* Live Pool HUD */}
-          <div className="flex flex-wrap items-center gap-2.5 p-2.5 rounded-2xl border border-white/10 bg-slate-900/80 backdrop-blur-md">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800">
-              <Database className="w-4 h-4 text-purple-400" />
-              <div>
-                <div className="text-[9px] text-slate-400 font-bold uppercase">Total Uploaded</div>
-                <div className="text-xs font-bold text-white font-mono tabular-nums">{poolTotal} Uploaded</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800">
-              <Scissors className="w-4 h-4 text-rose-400" />
-              <div>
-                <div className="text-[9px] text-slate-400 font-bold uppercase">Used / Cut</div>
-                <div className="text-xs font-bold text-rose-400 font-mono tabular-nums">{poolConsumed} Cut</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <div>
-                <div className="text-[9px] text-slate-400 font-bold uppercase">Remaining</div>
-                <div className="text-xs font-bold text-emerald-400 font-mono tabular-nums">{poolAvailable} Available</div>
-              </div>
-            </div>
+        <div className="flex flex-wrap items-center gap-2.5 p-2 rounded-2xl border border-slate-800 bg-slate-950/75">
+          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
+            <div className="text-[9px] text-slate-400 font-bold uppercase">Uploaded</div>
+            <div className="text-xs font-bold text-slate-100 font-mono">{poolTotal}</div>
+          </div>
+          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
+            <div className="text-[9px] text-slate-400 font-bold uppercase">Cut</div>
+            <div className="text-xs font-bold text-rose-400 font-mono">{poolConsumed}</div>
+          </div>
+          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-emerald-500/25">
+            <div className="text-[9px] text-slate-400 font-bold uppercase">Available</div>
+            <div className="text-xs font-bold text-emerald-400 font-mono">{poolAvailable}</div>
           </div>
         </div>
       </div>
 
-      {/* Package & Credit Enforcement Banner */}
       <PackageCreditGuard
         userId={user?.id}
         requiredCredits={effectiveCreditsNeeded}
         creditUnitLabel="3 Credits per Email Address"
       />
 
-      {/* Pool Status Callout */}
-      {poolAvailable === 0 ? (
-        <div className="p-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 text-xs flex items-start justify-between gap-3 shadow-lg">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0 mt-0.5">
-              <Database className="w-4 h-4" />
-            </div>
-            <div>
-              <h4 className="font-bold text-white text-xs">Admin Emails Pool is Empty (0 Available)</h4>
-              <p className="text-amber-200/80 leading-relaxed mt-0.5">
-                Emails <strong>only generate</strong> after the administrator uploads email addresses in the Admin Panel. Total uploaded: <strong className="font-mono tabular-nums">{poolTotal}</strong> · Used: <strong className="font-mono tabular-nums">{poolConsumed}</strong>.
-              </p>
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="lg:col-span-5 oe-panel rounded-3xl p-6 space-y-5">
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-3.5">
+            <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-violet-400" />
+              <span>Mailbox Settings</span>
+            </h2>
+            <span className="text-[11px] font-mono text-violet-300">
+              {selectedConfig.flag} {selectedDomain === 'all' ? 'All Domains' : `@${resolvedDomain}`}
+            </span>
           </div>
-          <span className="font-mono text-[10px] font-bold text-amber-400 bg-amber-950/80 px-2.5 py-1 rounded-lg border border-amber-500/30 whitespace-nowrap">
-            Upload Required
-          </span>
-        </div>
-      ) : (
-        <div className="flex items-center justify-between gap-3 p-4 rounded-2xl border border-purple-500/20 bg-purple-500/5 text-xs text-purple-700 dark:text-purple-300">
-          <div className="flex items-center gap-2.5">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-            <p className="leading-relaxed">
-              <strong className="font-mono tabular-nums">{poolAvailable}</strong> unused email addresses available in Admin Pool ({poolConsumed} consumed).
-            </p>
-          </div>
-          <span className="font-mono text-[11px] font-bold text-purple-400">
-            {selectedConfig.flag} {selectedConfig.locale}
-          </span>
-        </div>
-      )}
 
-      {/* Main Grid: Controls vs Output */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Controls Column */}
-        <div className="lg:col-span-5 space-y-6">
-          <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-purple-500" />
-                <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-wide">
-                  Mailbox Configuration
-                </h2>
-              </div>
-              <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                Global GEOs
-              </span>
-            </div>
-
-            {/* Target Country & Domain Tiles */}
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <Globe2 className="w-3.5 h-3.5 text-purple-400" />
-                  <span>Target Country / GEO Language</span>
-                </label>
-                <span className="text-[11px] font-mono text-purple-400 font-semibold truncate max-w-[160px]">
-                  {selectedConfig.flag} {selectedConfig.locale}
-                </span>
-              </div>
-
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={countrySearch}
-                  onChange={e => setCountrySearch(e.target.value)}
-                  placeholder="Search country, domain, or GEO language..."
-                  className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs text-slate-900 dark:text-white placeholder:text-slate-500 focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
-                {filteredCountries.map(c => {
-                  const isSelected = country === c.name;
-                  return (
-                    <button
-                      key={c.name}
-                      type="button"
-                      onClick={() => setCountry(c.name)}
-                      className={`group relative p-2 rounded-xl border text-left transition-all duration-200 cursor-pointer flex items-center justify-between ${
-                        isSelected
-                          ? 'border-purple-500 bg-purple-500/10 shadow-sm shadow-purple-500/20 ring-1 ring-purple-500/30'
-                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-950/50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-base leading-none shrink-0">{c.flag}</span>
-                        <div className="min-w-0">
-                          <p className={`text-[11px] font-medium truncate ${isSelected ? 'text-purple-400 font-semibold' : 'text-slate-700 dark:text-slate-300'}`}>
-                            {c.name}
-                          </p>
-                          <p className="text-[9px] font-mono text-slate-400 truncate">
-                            {c.locale} · @{c.domain}
-                          </p>
-                        </div>
-                      </div>
-                      {isSelected && (
-                        <div className="w-4 h-4 rounded-full bg-purple-500 flex items-center justify-center shrink-0 ml-1">
-                          <Check className="w-2.5 h-2.5 text-slate-950 stroke-[3]" />
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Quantity Slider & Presets */}
-            <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-purple-400" />
-                  Quantity To Generate
-                </label>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-mono font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 tabular-nums">
-                    {quantity} emails
-                  </span>
-                </div>
-              </div>
-
-              {/* Range Slider */}
-              <input
-                type="range"
-                min={1}
-                max={100}
-                value={quantity}
-                onChange={e => setQuantity(Number(e.target.value))}
-                className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
-              />
-
-              {/* Quick Preset Buttons */}
-              <div className="grid grid-cols-5 gap-1.5 pt-1">
-                {[5, 10, 25, 50, 100].map(val => (
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <AtSign className="w-3.5 h-3.5 text-violet-400" />
+              <span>Email Domain</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: 'all' as const, label: 'All Domains', sub: 'Mixed pool', count: poolAvailable },
+                { id: 'gmail.com' as const, label: '@gmail.com', sub: 'Google Mail', count: gmailAvailable },
+                { id: 'outlook.com' as const, label: '@outlook.com', sub: 'Microsoft', count: outlookAvailable },
+                {
+                  id: 'country' as const,
+                  label: `@${selectedConfig.domain}`,
+                  sub: 'Country GEO',
+                  count: countryDomainAvailable,
+                },
+              ].map(dom => {
+                const isSelected = selectedDomain === dom.id;
+                return (
                   <button
-                    key={val}
+                    key={dom.id}
                     type="button"
-                    onClick={() => setQuantity(val)}
-                    className={`py-1.5 text-[11px] font-mono rounded-lg transition-colors cursor-pointer border ${
-                      quantity === val
-                        ? 'border-purple-500/40 bg-purple-500/20 text-purple-300 font-bold'
-                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-100/50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400'
+                    onClick={() => {
+                      playUiSound('click');
+                      setSelectedDomain(dom.id);
+                    }}
+                    className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between gap-1.5 ${
+                      isSelected
+                        ? 'border-violet-500 bg-violet-500/20 text-slate-100 font-bold'
+                        : 'border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700'
                     }`}
                   >
-                    {val}
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-mono truncate">{dom.label}</div>
+                      <div className="text-[9px] text-slate-400 truncate">{dom.sub}</div>
+                    </div>
+                    <span
+                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md shrink-0 ${
+                        dom.count > 0
+                          ? 'bg-emerald-500/15 text-emerald-400 font-bold'
+                          : 'bg-slate-800/70 text-slate-500'
+                      }`}
+                    >
+                      {dom.count}
+                    </span>
                   </button>
-                ))}
-              </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-2.5">
+            <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <Globe2 className="w-3.5 h-3.5 text-violet-400" />
+              <span>Target Country</span>
+            </label>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={countrySearch}
+                onChange={e => setCountrySearch(e.target.value)}
+                placeholder="Search country or domain..."
+                className="w-full pl-9 pr-3 py-2 rounded-xl border text-xs text-slate-100"
+              />
             </div>
 
-            {/* Selected Domain Preview */}
-            <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs space-y-1">
-              <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">Target Sandbox Domain</span>
-              <p className="font-mono text-purple-400 font-semibold flex items-center gap-2">
-                <AtSign className="w-3.5 h-3.5" />
-                alex.doe@{selectedConfig.domain}
+            <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+              {filteredCountries.map(c => {
+                const isSelected = country === c.name;
+                return (
+                  <button
+                    key={c.name}
+                    type="button"
+                    onClick={() => setCountry(c.name)}
+                    className={`p-2 rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                      isSelected
+                        ? 'border-violet-500 bg-violet-500/20 text-slate-100 font-bold'
+                        : 'border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-base shrink-0">{c.flag}</span>
+                      <div className="min-w-0">
+                        <div className="text-[11px] truncate">{c.name}</div>
+                        <div className="text-[9px] font-mono text-slate-400 truncate">
+                          @{selectedDomain === 'all' || selectedDomain === 'country' ? c.domain : selectedDomain}
+                        </div>
+                      </div>
+                    </div>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-violet-300 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-2.5 pt-2 border-t border-slate-800/80">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-300">Quantity</span>
+              <span className="font-mono font-bold text-violet-300">{quantity} emails</span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={100}
+              value={quantity}
+              onChange={e => setQuantity(Number(e.target.value))}
+              className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-500"
+            />
+            <div className="grid grid-cols-5 gap-1.5">
+              {[5, 10, 25, 50, 100].map(val => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setQuantity(val)}
+                  className={`py-1.5 text-[11px] font-mono rounded-lg border cursor-pointer ${
+                    quantity === val
+                      ? 'border-violet-500 bg-violet-500/20 text-slate-100 font-bold'
+                      : 'border-slate-800 bg-slate-950/60 text-slate-400'
+                  }`}
+                >
+                  {val}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/70 text-xs flex items-center justify-between">
+            <span className="text-slate-400">Sample Pattern</span>
+            <span className="font-mono text-violet-300 flex items-center gap-1.5">
+              <AtSign className="w-3.5 h-3.5" />
+              alex.doe@{activeDomainDisplay}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={isGenerating}
+            className={`w-full py-3.5 rounded-2xl font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer ${
+              filteredPoolAvailable === 0 || !creditAccess.allowed
+                ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:border-amber-400/50'
+                : 'btn-premium-vivid'
+            }`}
+          >
+            <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
+            <span>
+              {!creditAccess.allowed
+                ? creditAccess.hasUsablePackage
+                  ? `Need ${effectiveCreditsNeeded} Cr`
+                  : 'Unlock Package to Generate'
+                : poolAvailable === 0
+                ? 'Admin Must Upload Emails'
+                : filteredPoolAvailable === 0
+                ? `No @${resolvedDomain} in Pool`
+                : `Generate ${effectiveItemsCount} ${selectedDomain === 'all' ? 'Emails' : `@${resolvedDomain}`}`}
+            </span>
+          </button>
+        </div>
+
+        <div className="lg:col-span-7 oe-panel rounded-3xl p-6 space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3.5">
+            <div className="flex items-center gap-2.5">
+              <h3 className="text-base font-bold text-slate-100">Generated Email Records</h3>
+              <span className="px-2.5 py-0.5 rounded-full bg-violet-500/20 border border-violet-400/35 text-violet-200 text-xs font-mono font-bold">
+                {mails.length}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {fromPool > 0 && (
+                <span className="text-[11px] font-mono text-emerald-300 flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5" /> {fromPool} cut
+                </span>
+              )}
+              {mails.length > 0 && (
+                <div className="flex items-center bg-slate-950 p-0.5 rounded-xl border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('cards')}
+                    className={`px-2.5 py-1 text-[11px] font-bold rounded-lg cursor-pointer flex items-center gap-1 ${
+                      viewMode === 'cards' ? 'bg-violet-600 text-white' : 'text-slate-400'
+                    }`}
+                  >
+                    <Layers className="w-3 h-3" /> Tiles
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('raw')}
+                    className={`px-2.5 py-1 text-[11px] font-bold rounded-lg cursor-pointer flex items-center gap-1 ${
+                      viewMode === 'raw' ? 'bg-violet-600 text-white' : 'text-slate-400'
+                    }`}
+                  >
+                    <Terminal className="w-3 h-3" /> Raw
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {mails.length === 0 ? (
+            <div className="h-96 rounded-2xl border-2 border-dashed border-slate-800 bg-slate-950/40 flex flex-col items-center justify-center p-8 text-center space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-violet-500/15 border border-violet-400/30 flex items-center justify-center text-violet-300">
+                <Mail className="w-7 h-7" />
+              </div>
+              <p className="text-sm font-bold text-slate-100">No Email Addresses Generated</p>
+              <p className="text-xs text-slate-400 max-w-sm">
+                Select a country, adjust quantity, and click Generate to retrieve email records.
               </p>
             </div>
+          ) : viewMode === 'cards' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[420px] overflow-y-auto pr-1">
+              <AnimatePresence>
+                {mails.map((email, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.15, delay: Math.min(idx * 0.015, 0.25) }}
+                    className="p-3 rounded-2xl border border-slate-800 hover:border-violet-500/45 bg-slate-950/75 flex items-center justify-between gap-2"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 flex items-center justify-center text-white font-bold text-xs shrink-0">
+                        {email.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="font-mono text-xs text-slate-200 truncate">{email}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => copySingle(email, idx)}
+                      className={`p-1.5 rounded-lg border cursor-pointer shrink-0 ${
+                        copiedIndex === idx
+                          ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
+                          : 'border-slate-700 bg-slate-900 text-slate-300'
+                      }`}
+                    >
+                      {copiedIndex === idx ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <textarea
+              readOnly
+              rows={15}
+              value={mails.join('\n')}
+              className="w-full p-4 rounded-2xl border bg-slate-950 font-mono text-xs text-violet-200 resize-none leading-relaxed"
+            />
+          )}
 
-            {/* Action Trigger */}
-            <motion.button
-              whileTap={{ scale: poolAvailable > 0 && creditAccess.allowed ? 0.98 : 1 }}
-              onClick={handleGenerate}
-              disabled={isGenerating || poolAvailable === 0 || !creditAccess.allowed}
-              className={`w-full py-3.5 rounded-2xl font-bold text-xs tracking-wider uppercase shadow-lg flex items-center justify-center gap-2 transition-all ${
-                poolAvailable === 0 || !creditAccess.allowed
-                  ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-purple-600/25 cursor-pointer'
-              }`}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+            <button
+              type="button"
+              onClick={copyAll}
+              disabled={mails.length === 0}
+              className="btn-premium-emerald py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer"
             >
-              <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
-              <span>
-                {isGenerating
-                  ? 'Retrieving Emails...'
-                  : !creditAccess.allowed
-                  ? creditAccess.hasActivePackage && creditAccess.remainingCredits > 0
-                    ? `Need ${effectiveCreditsNeeded} Cr (${creditAccess.remainingCredits} left)`
-                    : 'Package & Credits Required'
-                  : poolAvailable === 0
-                  ? 'Admin Must Upload Emails First'
-                  : `Generate & Cut ${effectiveItemsCount} Emails${
-                      creditAccess.isAdmin ? '' : ` (${effectiveCreditsNeeded} Cr)`
-                    }`}
-              </span>
-            </motion.button>
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copy All ({mails.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={downloadTxt}
+              disabled={mails.length === 0}
+              className="btn-premium-cyan py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download .{outputFormat.toLowerCase()}</span>
+            </button>
+            <button
+              type="button"
+              onClick={saveResults}
+              disabled={mails.length === 0}
+              className="btn-premium-primary py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer"
+            >
+              <Bookmark className="w-3.5 h-3.5" />
+              <span>Save Results</span>
+            </button>
           </div>
         </div>
+      </div>
 
-        {/* Output Column */}
-        <div className="lg:col-span-7 space-y-4">
-          <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl space-y-5">
-            {/* Output Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-purple-400" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                  Generated Email Records
-                </h3>
-                <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold tabular-nums">
-                  {mails.length} addresses
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {fromPool > 0 && (
-                  <span className="text-[11px] font-medium text-purple-400 flex items-center gap-1 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
-                    <ShieldCheck className="w-3 h-3" />
-                    {fromPool} matched from pool
-                  </span>
-                )}
-
-                {/* View Mode Toggle */}
-                {mails.length > 0 && (
-                  <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('cards')}
-                      className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-all cursor-pointer flex items-center gap-1 ${
-                        viewMode === 'cards'
-                          ? 'bg-purple-600 text-white font-bold shadow-sm'
-                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <Layers className="w-3 h-3" />
-                      Tiles
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('raw')}
-                      className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-all cursor-pointer flex items-center gap-1 ${
-                        viewMode === 'raw'
-                          ? 'bg-purple-600 text-white font-bold shadow-sm'
-                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <Terminal className="w-3 h-3" />
-                      Raw
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Output Display */}
-            {mails.length === 0 ? (
-              <div className="h-96 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800/80 flex flex-col items-center justify-center p-8 text-center space-y-3">
-                <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
-                  <Mail className="w-7 h-7" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                    No Email Addresses Generated
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
-                    Select a GEO sandbox domain on the left, adjust quantity slider, and trigger generation to view test email cards.
-                  </p>
-                </div>
-              </div>
-            ) : viewMode === 'cards' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[460px] overflow-y-auto pr-1">
-                <AnimatePresence>
-                  {mails.map((email, idx) => {
-                    const localPart = email.split('@')[0] || '';
-                    const initial = localPart.charAt(0).toUpperCase() || 'E';
-                    return (
-                      <motion.div
-                        key={idx}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.2, delay: Math.min(idx * 0.02, 0.4) }}
-                        className="group p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-purple-500/50 bg-slate-50/70 dark:bg-slate-950/70 flex items-center justify-between transition-all"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
-                            {initial}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-mono text-xs font-semibold text-slate-900 dark:text-slate-100 truncate group-hover:text-purple-400 transition-colors">
-                              {email}
-                            </p>
-                            <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                              {selectedConfig.flag} RFC 2606 · Safe QA
-                            </span>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => copySingle(email, idx)}
-                          className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
-                            copiedIndex === idx
-                              ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400'
-                              : 'border-slate-200 dark:border-slate-800 hover:border-purple-500 bg-white dark:bg-slate-900 text-slate-500 hover:text-purple-400'
-                          }`}
-                          title="Copy this email address"
-                        >
-                          {copiedIndex === idx ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </motion.div>
-                    );
-                  })}
-                </AnimatePresence>
-              </div>
-            ) : (
-              <div className="relative">
-                <textarea
-                  readOnly
-                  rows={16}
-                  value={mails.join('\n')}
-                  className="w-full p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 font-mono text-xs text-slate-800 dark:text-purple-300 focus:outline-none resize-none leading-relaxed selection:bg-purple-500/30"
-                />
-              </div>
-            )}
-
-            {/* Action Bar */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-              <button
-                type="button"
-                onClick={copyAll}
-                disabled={mails.length === 0}
-                className="py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-purple-500/50 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-40 cursor-pointer shadow-sm"
-              >
-                <Copy className="w-3.5 h-3.5 text-purple-400" />
-                <span>Copy All ({mails.length})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={downloadTxt}
-                disabled={mails.length === 0}
-                className="py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-purple-500/50 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-40 cursor-pointer shadow-sm"
-              >
-                <Download className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Download TXT</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={saveResults}
-                disabled={mails.length === 0}
-                className="py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20 transition-all disabled:opacity-40 cursor-pointer"
-              >
-                <Bookmark className="w-3.5 h-3.5" />
-                <span>Save to Dashboard</span>
-              </button>
-            </div>
-          </div>
-        </div>
+      <div className="oe-panel rounded-2xl p-4 flex items-center justify-between text-[11px] text-slate-400">
+        <span className="flex items-center gap-1.5">
+          <Scissors className="w-3.5 h-3.5 text-rose-400" />
+          <span>Distributed emails are permanently removed from the active Admin Pool.</span>
+        </span>
+        <span className="flex items-center gap-1 font-mono text-slate-500">
+          <Database className="w-3.5 h-3.5 text-violet-400" /> {poolTotal} total
+        </span>
       </div>
     </div>
   );

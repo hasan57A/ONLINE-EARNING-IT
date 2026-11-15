@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useRouter } from '../../context/RouterContext';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, PLATFORM_LOGO_URL } from '../../context/RouterContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../ui/Toast';
 import {
@@ -13,6 +13,7 @@ import {
   Shield,
   LogOut,
   ChevronRight,
+  ChevronDown,
   Menu,
   X,
   Smartphone,
@@ -28,19 +29,31 @@ import {
   Cloud,
   Coins,
   Lock,
-  Sparkles,
+  Crown,
+  Bell,
+  Search,
+  Settings,
+  Megaphone,
+  ArrowRight,
   CheckCircle2,
   Clock,
-  ArrowRight,
 } from 'lucide-react';
-import { TOOL_REALISTIC_IMAGES } from '../ui/RealisticIcon';
 import { ThemeSwitcher } from '../ui/ThemeSwitcher';
 import { useDbSync } from '../../hooks/useDbSync';
 import { db } from '../../services/db';
+import { playUiSound } from '../../services/sound';
 
 const LOCKED_PATH_PREFIXES = ['/tools', '/resources', '/history', '/saved-results'];
+const FREE_PATHS = [
+  '/tools',
+  '/tools/text-shuffler',
+  '/tools/duplicate-text-remover',
+  '/history',
+  '/saved-results',
+];
 
 function isPathLockedForFreeUser(targetPath: string): boolean {
+  if (FREE_PATHS.includes(targetPath)) return false;
   return LOCKED_PATH_PREFIXES.some(
     prefix => targetPath === prefix || targetPath.startsWith(`${prefix}/`)
   );
@@ -49,17 +62,66 @@ function isPathLockedForFreeUser(targetPath: string): boolean {
 export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   useDbSync();
   const { path, navigate } = useRouter();
-  const { user, isAuthenticated, isAdmin, signOut } = useAuth();
+  const { user, isAuthenticated, isAdmin, cloudConnected, signInWithGoogle, signOut } = useAuth();
   const { showToast } = useToast();
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toolsExpanded, setToolsExpanded] = useState(path.startsWith('/tools'));
   const [resourcesExpanded, setResourcesExpanded] = useState(path.startsWith('/resources'));
   const [packagePromptFeature, setPackagePromptFeature] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const toolAccess = db.canUseTool(user?.id);
   const packages = db.getPaymentPackages();
+  const announcements = db.getAnnouncements().filter(a => a.status === 'Published' || a.status === 'Sent');
+  const isCompactSidebar = db.getUserPreferences().sidebarStyle === 'compact';
   const isWorkspaceUnlocked = toolAccess.isAdmin || toolAccess.hasUsablePackage;
   const isCurrentRouteLocked = !isWorkspaceUnlocked && isPathLockedForFreeUser(path);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  const searchItems = useMemo(
+    () => [
+      { label: 'Dashboard Overview', category: 'Main', href: '/dashboard' },
+      { label: 'User Agent Generator', category: 'Tool', href: '/tools/user-agent-generator' },
+      { label: 'Phone Number Generator', category: 'Tool', href: '/tools/number-generator' },
+      { label: 'Lead Generator', category: 'Tool', href: '/tools/lead-generator' },
+      { label: 'Mail Generator', category: 'Tool', href: '/tools/mail-generator' },
+      { label: 'Text Shuffler', category: 'Tool', href: '/tools/text-shuffler' },
+      { label: 'Duplicate Text Remover', category: 'Tool', href: '/tools/duplicate-text-remover' },
+      { label: 'Resources Hub', category: 'Resources', href: '/resources' },
+      { label: 'Best CPA Networks', category: 'Resources', href: '/resources/cpa-networks' },
+      { label: 'Best Proxy Sites', category: 'Resources', href: '/resources/proxy-sites' },
+      { label: 'Best Antidetect Browsers', category: 'Resources', href: '/resources/antidetect-browsers' },
+      { label: 'Payments & Plans', category: 'Billing', href: '/payment' },
+      { label: 'My Profile', category: 'Account', href: '/profile' },
+      { label: 'Settings', category: 'Account', href: '/settings' },
+      { label: 'Announcements & Updates', category: 'Updates', href: '/announcements' },
+      { label: 'Support Center', category: 'Help', href: '/support' },
+    ],
+    []
+  );
+
+  const filteredSearch = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return searchItems.slice(0, 6);
+    return searchItems.filter(
+      item => item.label.toLowerCase().includes(q) || item.category.toLowerCase().includes(q)
+    );
+  }, [searchItems, searchQuery]);
 
   const openPackagePrompt = (featureLabel: string) => {
     setSidebarOpen(false);
@@ -72,32 +134,52 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     );
   };
 
+  const handleGuardedNavigate = (href: string, label: string) => {
+    playUiSound('click');
+    setSearchFocused(false);
+    setSearchQuery('');
+    if (!isWorkspaceUnlocked && isPathLockedForFreeUser(href)) {
+      openPackagePrompt(label);
+      return;
+    }
+    navigate(href);
+    setSidebarOpen(false);
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-slate-950 text-slate-100">
-        <div className="max-w-md w-full p-8 rounded-2xl border border-slate-800 bg-slate-900/90 text-center space-y-5">
-          <div className="w-12 h-12 mx-auto rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
+        <div className="max-w-md w-full p-8 rounded-3xl oe-panel text-center space-y-5">
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-violet-500/15 border border-violet-500/30 text-violet-400 flex items-center justify-center">
             <User className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold">Authentication Required</h2>
-            <p className="text-xs text-slate-400 mt-1">Please sign in to access your tools and dashboard.</p>
+            <h2 className="text-xl font-bold text-slate-100">Authentication Required</h2>
+            <p className="text-xs text-slate-400 mt-1">
+              Please sign in to access your tools, saved results, and dashboard.
+            </p>
           </div>
           <div className="flex gap-3">
             <button
+              type="button"
               onClick={() => navigate('/signin?redirect=' + encodeURIComponent(path))}
-              className="flex-1 py-2.5 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+              className="flex-1 py-2.5 text-xs rounded-xl btn-premium-primary cursor-pointer"
             >
               Sign In
             </button>
             <button
+              type="button"
               onClick={() => navigate('/signup')}
-              className="flex-1 py-2.5 text-xs font-semibold rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-200 transition-colors"
+              className="flex-1 py-2.5 text-xs rounded-xl btn-premium-glass cursor-pointer"
             >
               Create Account
             </button>
           </div>
-          <button onClick={() => navigate('/')} className="text-xs text-slate-500 hover:text-slate-300">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="text-xs text-slate-400 hover:text-slate-100 cursor-pointer"
+          >
             ← Back to Homepage
           </button>
         </div>
@@ -105,457 +187,378 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
     );
   }
 
-  const navItems = [
-    { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    {
-      label: 'Tools & Utilities',
-      href: '/tools',
-      icon: Wrench,
-      hasSubmenu: true,
-      expanded: toolsExpanded,
-      setExpanded: setToolsExpanded,
-      subItems: [
-        { label: 'User Agent Generator', href: '/tools/user-agent-generator', icon: Smartphone },
-        { label: 'Lead Generator', href: '/tools/lead-generator', icon: Users },
-        { label: 'Text Shuffler', href: '/tools/text-shuffler', icon: Shuffle },
-        { label: 'Duplicate Text Remover', href: '/tools/duplicate-text-remover', icon: Filter },
-        { label: 'Number Generator', href: '/tools/number-generator', icon: PhoneCall },
-        { label: 'Mail Generator', href: '/tools/mail-generator', icon: Mail },
-      ],
-    },
-    {
-      label: 'Resources Hub',
-      href: '/resources',
-      icon: Globe2,
-      hasSubmenu: true,
-      expanded: resourcesExpanded,
-      setExpanded: setResourcesExpanded,
-      subItems: [
-        { label: 'Best CPA Networks', href: '/resources/cpa-networks', icon: Network },
-        { label: 'Best Proxy Sites', href: '/resources/proxy-sites', icon: Server },
-        { label: 'Best Antidetect Browsers', href: '/resources/antidetect-browsers', icon: Layers },
-      ],
-    },
-    { label: 'Usage History', href: '/history', icon: History },
-    { label: 'Saved Results', href: '/saved-results', icon: Bookmark },
-    { label: 'Payments & Plans', href: '/payment', icon: CreditCard },
-    { label: 'Support Tickets', href: '/support', icon: LifeBuoy },
-    { label: 'My Profile', href: '/profile', icon: User },
+  const toolSubItems = [
+    { label: 'User Agent Generator', href: '/tools/user-agent-generator', icon: Smartphone },
+    { label: 'Lead Generator', href: '/tools/lead-generator', icon: Users },
+    { label: 'Mail Generator', href: '/tools/mail-generator', icon: Mail },
+    { label: 'Phone Generator', href: '/tools/number-generator', icon: PhoneCall },
+    { label: 'Duplicate Remover', href: '/tools/duplicate-text-remover', icon: Filter },
+    { label: 'Text Shuffler', href: '/tools/text-shuffler', icon: Shuffle },
   ];
 
-  const getBreadcrumbs = () => {
-    const parts = path.split('/').filter(Boolean);
-    if (parts.length === 0) return ['Home'];
-    return parts.map(p =>
-      p
-        .split('-')
-        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ')
-    );
-  };
+  const resourceSubItems = [
+    { label: 'Best CPA Networks', href: '/resources/cpa-networks', icon: Network },
+    { label: 'Best Proxy Sites', href: '/resources/proxy-sites', icon: Server },
+    { label: 'Antidetect Browsers', href: '/resources/antidetect-browsers', icon: Layers },
+  ];
 
-  const packageCreditTotal = toolAccess.packageCredits ?? toolAccess.remainingCredits;
-  const creditProgressPercent =
-    packageCreditTotal > 0
-      ? Math.min(100, Math.max(0, Math.round((toolAccess.remainingCredits / packageCreditTotal) * 100)))
-      : 0;
+  const userInitial = (user?.fullName || 'U').charAt(0).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex transition-colors">
-      {/* Mobile Sidebar Backdrop */}
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex">
+      {/* Mobile Backdrop */}
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden"
         />
       )}
 
-      {/* Package Required Click Modal */}
-      {packagePromptFeature && (
-        <div
-          onClick={() => setPackagePromptFeature(null)}
-          className="fixed inset-0 z-[70] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            className="max-w-3xl w-full rounded-3xl border border-rose-500/40 bg-slate-900 p-6 sm:p-7 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto"
-          >
-            <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-4">
-              <div className="flex items-start gap-3.5">
-                <div className="w-11 h-11 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
-                  {toolAccess.planStatus === 'pending' ? (
-                    <Clock className="w-5 h-5 text-amber-400" />
-                  ) : (
-                    <Lock className="w-5 h-5" />
-                  )}
-                </div>
-                <div>
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30">
-                    Package Required
-                  </span>
-                  <h3 className="text-lg sm:text-xl font-black text-white mt-1.5">
-                    {toolAccess.planStatus === 'pending'
-                      ? 'Payment Pending Admin Approval'
-                      : `Take a Package to Unlock ${packagePromptFeature}`}
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                    {toolAccess.planStatus === 'pending'
-                      ? `Your payment for ${toolAccess.planName || 'your package'}${
-                          toolAccess.packageCredits ? ` (${toolAccess.packageCredits.toLocaleString()} Credits)` : ''
-                        } is waiting for Admin approval. Tools and resources remain locked until approved.`
-                      : 'Nothing works without an active package and credits. Select a credit package below to activate your account immediately after payment verification.'}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPackagePromptFeature(null)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-              {packages.map((pkg, idx) => (
-                <div
-                  key={pkg.id}
-                  className={`p-4 rounded-2xl border flex flex-col justify-between space-y-4 ${
-                    idx === 1
-                      ? 'border-blue-500/60 bg-blue-950/30'
-                      : 'border-slate-800 bg-slate-950/70'
-                  }`}
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-bold uppercase text-blue-400">
-                        {pkg.durationLabel}
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-[11px] font-mono font-extrabold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                        <Coins className="w-3 h-3" />
-                        <span>{pkg.credits.toLocaleString()} Credits</span>
-                      </span>
-                    </div>
-                    <h4 className="text-base font-extrabold text-white">{pkg.name}</h4>
-                    <div className="flex items-baseline justify-between font-mono pt-1">
-                      <span className="text-xl font-black text-white">৳{pkg.priceBdt.toLocaleString()}</span>
-                      <span className="text-xs font-bold text-amber-400">${pkg.priceUsdt} USDT</span>
-                    </div>
-                    <ul className="space-y-1 pt-2 border-t border-slate-800/80">
-                      {pkg.features.map(f => (
-                        <li key={f} className="text-[11px] text-slate-300 flex items-start gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                          <span>{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPackagePromptFeature(null);
-                      navigate(`/payment?pkg=${pkg.id}`);
-                    }}
-                    className={`w-full py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
-                      idx === 1
-                        ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                        : 'bg-slate-800 hover:bg-blue-600 text-white'
-                    }`}
-                  >
-                    <span>Take Package ({pkg.credits.toLocaleString()} Cr)</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800 text-xs">
-              <span className="text-slate-400">
-                Pay via bKash, Nagad, Rocket, or Binance Pay / USDT.
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setPackagePromptFeature(null);
-                  navigate('/payment');
-                }}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold flex items-center gap-1.5 cursor-pointer"
-              >
-                <CreditCard className="w-3.5 h-3.5" />
-                <span>Go to Packages & Payment</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Sidebar Navigation */}
+      {/* Left Obsidian Sidebar */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-64 border-r border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/95 flex flex-col justify-between transition-transform duration-200 lg:translate-x-0 ${
+        className={`fixed top-0 bottom-0 left-0 z-50 w-64 ${
+          isCompactSidebar ? 'lg:w-20' : 'lg:w-64'
+        } border-r border-slate-800/80 bg-slate-900 flex flex-col justify-between transition-all duration-200 lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex flex-col h-full overflow-y-auto">
-          {/* Logo Zone */}
-          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <div
+        <div className="flex flex-col h-full overflow-hidden">
+          {/* Brand Lockup */}
+          <div className={`h-16 px-4 border-b border-slate-800/80 flex items-center ${isCompactSidebar ? 'lg:justify-center lg:px-2' : 'justify-between'} shrink-0`}>
+            <button
+              type="button"
               onClick={() => {
-                navigate('/');
-                setSidebarOpen(false);
+                playUiSound('click');
+                navigate('/dashboard');
               }}
-              className="flex items-center gap-2.5 cursor-pointer select-none"
+              title="Online Earning IT"
+              className="flex items-center gap-2.5 cursor-pointer text-left"
             >
               <img
-                src="/assets/aistudio/Online_Earning_IT_Logo__e2215d9f_e2215d9f.png"
-                alt="ONLINE EARNING IT"
-                className="w-8 h-8 rounded-lg object-contain"
+                src={PLATFORM_LOGO_URL}
+                alt="Online Earning IT"
+                className="w-8 h-8 rounded-xl object-contain shadow-md shrink-0"
               />
-              <span className="text-xs font-bold tracking-tight text-slate-900 dark:text-white uppercase leading-tight">
-                ONLINE EARNING <span className="text-blue-500">IT</span>
-              </span>
-            </div>
+              <div className={isCompactSidebar ? 'lg:hidden' : ''}>
+                <span className="text-sm font-extrabold tracking-tight text-slate-100 block leading-tight">
+                  Online Earning IT
+                </span>
+                <span className="text-[10px] text-slate-400 block leading-none">
+                  Creator Workspace
+                </span>
+              </div>
+            </button>
             <button
+              type="button"
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-1 rounded-md text-slate-400 hover:text-slate-200"
+              className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-100 cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Navigation Links */}
-          <nav className="p-3 space-y-1">
-            {navItems.map(item => {
-              const Icon = item.icon;
-              const isActive = path === item.href || (item.subItems && path.startsWith(item.href));
-              const isItemLocked = !isWorkspaceUnlocked && isPathLockedForFreeUser(item.href);
+          {/* Navigation Scroll Area */}
+          <nav className={`flex-1 overflow-y-auto px-3 py-4 space-y-5 ${isCompactSidebar ? 'lg:px-2' : ''}`}>
+            {/* MAIN */}
+            <div className="space-y-1">
+              <div className={`px-3 pb-1 text-[10px] font-bold tracking-wider text-slate-500 uppercase ${isCompactSidebar ? 'lg:hidden' : ''}`}>
+                Main
+              </div>
+              <button
+                type="button"
+                title="Dashboard"
+                onClick={() => handleGuardedNavigate('/dashboard', 'Dashboard')}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  isCompactSidebar ? 'lg:justify-center lg:px-2' : ''
+                } ${
+                  path === '/dashboard'
+                    ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-600/30'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
+                }`}
+              >
+                <LayoutDashboard className="w-4 h-4 shrink-0" />
+                <span className={isCompactSidebar ? 'lg:hidden' : ''}>Dashboard</span>
+              </button>
 
-              if (item.hasSubmenu) {
-                return (
-                  <div key={item.label} className="space-y-0.5">
-                    <button
-                      onClick={() => {
-                        if (isItemLocked) {
-                          item.setExpanded(!item.expanded);
-                          openPackagePrompt(item.label);
-                          return;
-                        }
-                        item.setExpanded(!item.expanded);
-                        if (path !== item.href && !path.startsWith(item.href)) {
-                          navigate(item.href);
-                          setSidebarOpen(false);
-                        }
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-lg transition-colors text-left cursor-pointer ${
-                        isActive
-                          ? 'bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-400'
-                          : isItemLocked
-                          ? 'text-slate-500 hover:bg-rose-500/10 hover:text-rose-300'
-                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <Icon className="w-4 h-4 shrink-0" />
-                        <span className="truncate">{item.label}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {isItemLocked && <Lock className="w-3 h-3 text-rose-400" />}
-                        <ChevronRight
-                          className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                            item.expanded ? 'rotate-90' : ''
-                          }`}
-                        />
-                      </div>
-                    </button>
-
-                    {item.expanded && (
-                      <div className="pl-6 pr-1 py-1 space-y-0.5">
-                        {item.subItems?.map(sub => {
-                          const SubIcon = sub.icon;
-                          const isSubActive = path === sub.href;
-                          const toolSlug = sub.href.startsWith('/tools/') ? sub.href.replace('/tools/', '') : '';
-                          const realisticThumb = TOOL_REALISTIC_IMAGES[toolSlug];
-
-                          return (
-                            <button
-                              key={sub.label}
-                              onClick={() => {
-                                if (!isWorkspaceUnlocked && isPathLockedForFreeUser(sub.href)) {
-                                  openPackagePrompt(sub.label);
-                                  return;
-                                }
-                                navigate(sub.href);
-                                setSidebarOpen(false);
-                              }}
-                              className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-[11px] rounded-lg transition-all text-left cursor-pointer ${
-                                isSubActive
-                                  ? 'bg-blue-600 text-white font-semibold shadow-sm'
-                                  : isItemLocked
-                                  ? 'text-slate-500 hover:bg-rose-500/10 hover:text-rose-300'
-                                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                {realisticThumb ? (
-                                  <img
-                                    src={realisticThumb}
-                                    alt={sub.label}
-                                    className="w-4 h-4 rounded-md object-cover shrink-0 border border-slate-700/50 shadow-xs"
-                                  />
-                                ) : (
-                                  <SubIcon className="w-3.5 h-3.5 shrink-0" />
-                                )}
-                                <span className="truncate">{sub.label}</span>
-                              </div>
-                              {isItemLocked && <Lock className="w-3 h-3 text-rose-400 shrink-0" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              return (
+              {/* Tools Expandable */}
+              <div className="space-y-1">
                 <button
-                  key={item.label}
+                  type="button"
+                  title="Tools"
                   onClick={() => {
-                    if (isItemLocked) {
-                      openPackagePrompt(item.label);
-                      return;
+                    playUiSound('click');
+                    if (isCompactSidebar && window.innerWidth >= 1024) {
+                      navigate('/tools');
+                    } else {
+                      setToolsExpanded(prev => !prev);
                     }
-                    navigate(item.href);
-                    setSidebarOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between gap-2.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors text-left cursor-pointer ${
-                    isActive
-                      ? 'bg-blue-600 text-white font-semibold shadow-sm'
-                      : isItemLocked
-                      ? 'text-slate-500 hover:bg-rose-500/10 hover:text-rose-300'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    isCompactSidebar ? 'lg:justify-center lg:px-2' : ''
+                  } ${
+                    path.startsWith('/tools')
+                      ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-600/30'
+                      : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span className="truncate">{item.label}</span>
+                  <div className="flex items-center gap-3">
+                    <Wrench className="w-4 h-4 shrink-0" />
+                    <span className={isCompactSidebar ? 'lg:hidden' : ''}>Tools</span>
                   </div>
-                  {isItemLocked && <Lock className="w-3 h-3 text-rose-400 shrink-0" />}
+                  <span className={isCompactSidebar ? 'lg:hidden' : ''}>
+                    {toolsExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                  </span>
                 </button>
-              );
-            })}
 
-            {isAdmin && (
-              <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  onClick={() => {
-                    navigate('/admin');
-                    setSidebarOpen(false);
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-lg bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-colors cursor-pointer"
-                >
-                  <Shield className="w-4 h-4 shrink-0" />
-                  <span>Admin Console</span>
-                </button>
-              </div>
-            )}
-          </nav>
-
-          {/* Bottom Package Status & User Card */}
-          <div className="mt-auto p-3 border-t border-slate-100 dark:border-slate-800 space-y-2.5">
-            {/* Package & Credit Visibility Card */}
-            <div
-              onClick={() => {
-                navigate('/payment');
-                setSidebarOpen(false);
-              }}
-              className={`p-3 rounded-xl border cursor-pointer transition-colors space-y-2 ${
-                toolAccess.isAdmin
-                  ? 'border-emerald-500/30 bg-emerald-500/10'
-                  : toolAccess.hasUsablePackage
-                  ? 'border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15'
-                  : toolAccess.planStatus === 'pending'
-                  ? 'border-amber-500/40 bg-amber-500/10'
-                  : 'border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/15'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  {toolAccess.isAdmin ? 'Admin Plan' : 'Active Package'}
-                </span>
-                {toolAccess.isAdmin ? (
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                ) : toolAccess.hasUsablePackage ? (
-                  <Coins className="w-3.5 h-3.5 text-amber-400" />
-                ) : (
-                  <Lock className="w-3.5 h-3.5 text-rose-400" />
+                {toolsExpanded && (
+                  <div className={`pl-3 space-y-0.5 pt-0.5 ${isCompactSidebar ? 'lg:hidden' : ''}`}>
+                    <button
+                      type="button"
+                      onClick={() => handleGuardedNavigate('/tools', 'All Tools')}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                        path === '/tools'
+                          ? 'text-violet-300 bg-violet-500/10'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                      }`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+                      <span>All Tools Directory</span>
+                    </button>
+                    {toolSubItems.map(sub => {
+                      const SubIcon = sub.icon;
+                      const isSubActive = path === sub.href;
+                      const locked = !isWorkspaceUnlocked && isPathLockedForFreeUser(sub.href);
+                      return (
+                        <button
+                          key={sub.href}
+                          type="button"
+                          onClick={() => handleGuardedNavigate(sub.href, sub.label)}
+                          className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                            isSubActive
+                              ? 'text-slate-100 bg-violet-500/15 border border-violet-500/30'
+                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 truncate">
+                            <SubIcon className={`w-3.5 h-3.5 shrink-0 ${isSubActive ? 'text-violet-300' : 'text-slate-500'}`} />
+                            <span className="truncate">{sub.label}</span>
+                          </div>
+                          {locked && <Lock className="w-3 h-3 text-rose-400 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 
-              {toolAccess.isAdmin ? (
-                <div>
-                  <p className="text-xs font-bold text-white">Admin Unlimited</p>
-                  <p className="text-[10px] font-mono text-emerald-400">Unlimited Credits · All Unlocked</p>
-                </div>
-              ) : toolAccess.hasUsablePackage ? (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-1">
-                    <p className="text-xs font-bold text-white truncate">
-                      {toolAccess.planName || 'Active Package'}
-                    </p>
-                    <span className="text-[10px] font-mono font-bold text-amber-300 shrink-0">
-                      {packageCreditTotal.toLocaleString()} Cr Pack
-                    </span>
+              {/* Resources Expandable */}
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  title="Resources Hub"
+                  onClick={() => {
+                    playUiSound('click');
+                    if (isCompactSidebar && window.innerWidth >= 1024) {
+                      navigate('/resources');
+                    } else {
+                      setResourcesExpanded(prev => !prev);
+                    }
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    isCompactSidebar ? 'lg:justify-center lg:px-2' : ''
+                  } ${
+                    path.startsWith('/resources')
+                      ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-600/30'
+                      : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Globe2 className="w-4 h-4 shrink-0" />
+                    <span className={isCompactSidebar ? 'lg:hidden' : ''}>Resources Hub</span>
                   </div>
-                  <div className="h-1.5 w-full rounded-full bg-slate-950/80 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all"
-                      style={{ width: `${creditProgressPercent}%` }}
-                    />
+                  <span className={isCompactSidebar ? 'lg:hidden' : ''}>
+                    {resourcesExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                  </span>
+                </button>
+
+                {resourcesExpanded && (
+                  <div className={`pl-3 space-y-0.5 pt-0.5 ${isCompactSidebar ? 'lg:hidden' : ''}`}>
+                    {resourceSubItems.map(sub => {
+                      const SubIcon = sub.icon;
+                      const isSubActive = path === sub.href;
+                      const locked = !isWorkspaceUnlocked && isPathLockedForFreeUser(sub.href);
+                      return (
+                        <button
+                          key={sub.href}
+                          type="button"
+                          onClick={() => handleGuardedNavigate(sub.href, sub.label)}
+                          className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                            isSubActive
+                              ? 'text-slate-100 bg-violet-500/15 border border-violet-500/30'
+                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 truncate">
+                            <SubIcon className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+                            <span className="truncate">{sub.label}</span>
+                          </div>
+                          {locked && <Lock className="w-3 h-3 text-rose-400 shrink-0" />}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <p className="text-[10px] font-mono text-slate-300 tabular-nums">
-                    <strong className="text-white">{toolAccess.remainingCredits.toLocaleString()}</strong> /{' '}
-                    {packageCreditTotal.toLocaleString()} Credits Remaining
-                  </p>
-                </div>
-              ) : toolAccess.planStatus === 'pending' ? (
-                <div>
-                  <p className="text-xs font-bold text-amber-300 truncate">
-                    {toolAccess.planName || 'Package'} · Pending
-                  </p>
-                  <p className="text-[10px] font-mono text-amber-200/80">
-                    {toolAccess.packageCredits
-                      ? `${toolAccess.packageCredits.toLocaleString()} Cr Pack · Awaiting Approval`
-                      : 'Awaiting Admin Approval'}
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-xs font-bold text-rose-300">No Package · 0 Credits</p>
-                  <p className="text-[10px] text-rose-200/80">Click here to take a package →</p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
-            <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/60 flex items-center justify-between">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                  {user?.fullName?.charAt(0).toUpperCase() || 'U'}
+            {/* WORKSPACE & BILLING */}
+            <div className="space-y-1">
+              <div className={`px-3 pb-1 text-[10px] font-bold tracking-wider text-slate-500 uppercase ${isCompactSidebar ? 'lg:hidden' : ''}`}>
+                Workspace
+              </div>
+              {[
+                { label: 'Usage History', href: '/history', icon: History },
+                { label: 'Saved Results', href: '/saved-results', icon: Bookmark },
+                { label: 'Payments & Plans', href: '/payment', icon: CreditCard },
+                { label: 'Updates & News', href: '/announcements', icon: Megaphone },
+              ].map(item => {
+                const Icon = item.icon;
+                const active = path === item.href;
+                return (
+                  <button
+                    key={item.href}
+                    type="button"
+                    title={item.label}
+                    onClick={() => handleGuardedNavigate(item.href, item.label)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      isCompactSidebar ? 'lg:justify-center lg:px-2' : ''
+                    } ${
+                      active
+                        ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-600/30'
+                        : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span className={isCompactSidebar ? 'lg:hidden' : ''}>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ACCOUNT */}
+            <div className="space-y-1">
+              <div className={`px-3 pb-1 text-[10px] font-bold tracking-wider text-slate-500 uppercase ${isCompactSidebar ? 'lg:hidden' : ''}`}>
+                Account
+              </div>
+              {[
+                { label: 'My Profile', href: '/profile', icon: User },
+                { label: 'Settings', href: '/settings', icon: Settings },
+                { label: 'Support Center', href: '/support', icon: LifeBuoy },
+              ].map(item => {
+                const Icon = item.icon;
+                const active = path === item.href;
+                return (
+                  <button
+                    key={item.href}
+                    type="button"
+                    title={item.label}
+                    onClick={() => handleGuardedNavigate(item.href, item.label)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      isCompactSidebar ? 'lg:justify-center lg:px-2' : ''
+                    } ${
+                      active
+                        ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-600/30'
+                        : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span className={isCompactSidebar ? 'lg:hidden' : ''}>{item.label}</span>
+                  </button>
+                );
+              })}
+
+              {isAdmin && (
+                <button
+                  type="button"
+                  title="Open Admin Panel"
+                  onClick={() => {
+                    playUiSound('click');
+                    navigate('/admin');
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-colors cursor-pointer mt-1 ${
+                    isCompactSidebar ? 'lg:justify-center lg:px-2' : ''
+                  }`}
+                >
+                  <Shield className="w-4 h-4 shrink-0 text-amber-400" />
+                  <span className={isCompactSidebar ? 'lg:hidden' : ''}>Open Admin Panel</span>
+                </button>
+              )}
+            </div>
+          </nav>
+
+          {/* Bottom Upgrade Card & User Mini Strip */}
+          <div className={`p-3 border-t border-slate-800/80 space-y-2.5 shrink-0 ${isCompactSidebar ? 'lg:px-2' : ''}`}>
+            <div className={`p-3.5 rounded-2xl border border-violet-500/30 bg-violet-500/10 dark:bg-gradient-to-br dark:from-violet-950/70 dark:via-slate-900 dark:to-indigo-950/60 text-center space-y-2.5 ${isCompactSidebar ? 'lg:p-2' : ''}`}>
+              <button
+                type="button"
+                title={toolAccess.hasUsablePackage ? 'Add Credits' : 'Upgrade to Premium'}
+                onClick={() => {
+                  playUiSound('click');
+                  navigate('/payment');
+                  setSidebarOpen(false);
+                }}
+                className="w-9 h-9 mx-auto rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-zinc-950 flex items-center justify-center shadow-lg shadow-amber-500/20 cursor-pointer"
+              >
+                <Crown className="w-4 h-4" />
+              </button>
+              <div className={isCompactSidebar ? 'lg:hidden' : ''}>
+                <p className="text-xs font-bold text-slate-100">
+                  {toolAccess.isAdmin
+                    ? 'Admin Unlimited'
+                    : toolAccess.hasUsablePackage
+                    ? toolAccess.planName || 'Active Plan'
+                    : 'Upgrade to Premium'}
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5 tabular-nums">
+                  {toolAccess.isAdmin
+                    ? 'All tools & pools unlocked'
+                    : `${toolAccess.remainingCredits.toLocaleString()} Credits available`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  playUiSound('click');
+                  navigate('/payment');
+                  setSidebarOpen(false);
+                }}
+                className={`w-full py-2 px-3 rounded-xl btn-premium-vivid text-[11px] flex items-center justify-center gap-1.5 cursor-pointer ${
+                  isCompactSidebar ? 'lg:hidden' : ''
+                }`}
+              >
+                <span>{toolAccess.hasUsablePackage ? 'Add Credits' : 'Upgrade Now'}</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+
+            <div className={`flex items-center justify-between px-2 py-1.5 rounded-xl bg-slate-900/70 border border-slate-800/80 ${isCompactSidebar ? 'lg:flex-col lg:gap-1.5 lg:px-1' : ''}`}>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-violet-600 to-cyan-500 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                  {userInitial}
                 </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold truncate text-slate-900 dark:text-white leading-tight">
-                    {user?.fullName}
-                  </p>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{user?.gmail}</p>
+                <div className={`min-w-0 ${isCompactSidebar ? 'lg:hidden' : ''}`}>
+                  <p className="text-[11px] font-semibold text-slate-100 truncate">{user?.fullName}</p>
+                  <p className="text-[10px] text-slate-400 truncate capitalize">{user?.role || 'Member'}</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   signOut();
                   navigate('/');
                 }}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
-                title="Sign Out"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                title="Logout"
               >
                 <LogOut className="w-3.5 h-3.5" />
               </button>
@@ -564,162 +567,281 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
         </div>
       </aside>
 
-      {/* Main Viewport Content */}
-      <div className="flex-1 flex flex-col lg:pl-64 min-w-0">
+      {/* Main Content Area */}
+      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-200 ${isCompactSidebar ? 'lg:pl-20' : 'lg:pl-64'}`}>
         {/* Top Header */}
-        <header className="sticky top-0 z-30 h-16 border-b border-slate-200 dark:border-slate-800/80 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <header className="sticky top-0 z-30 h-16 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
             <button
+              type="button"
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="lg:hidden p-2 rounded-xl border border-slate-800 text-slate-300 hover:text-slate-100 cursor-pointer"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="w-4 h-4" />
             </button>
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-              {getBreadcrumbs().map((crumb, idx, arr) => (
-                <React.Fragment key={crumb}>
-                  <span className={idx === arr.length - 1 ? 'font-semibold text-slate-900 dark:text-slate-100' : ''}>
-                    {crumb}
-                  </span>
-                  {idx < arr.length - 1 && <span className="opacity-40">/</span>}
-                </React.Fragment>
-              ))}
+
+            {/* Center/Left Command Search */}
+            <div className="relative max-w-md w-full hidden sm:block">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5 pointer-events-none" />
+              <input
+                ref={searchRef}
+                type="text"
+                value={searchQuery}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setTimeout(() => setSearchFocused(false), 180)}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search tools, pages..."
+                className="w-full pl-10 pr-16 py-2 rounded-xl border border-slate-800 bg-slate-950 text-xs text-slate-100 placeholder:text-slate-500"
+              />
+              <span className="absolute right-2.5 top-2 px-1.5 py-0.5 rounded bg-slate-800/90 text-[10px] font-mono text-slate-400 pointer-events-none">
+                Ctrl /
+              </span>
+
+              {searchFocused && (
+                <div className="absolute left-0 right-0 top-11 rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl p-2 space-y-1 z-50">
+                  {filteredSearch.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-slate-500">No matching tools or pages.</p>
+                  ) : (
+                    filteredSearch.map(item => (
+                      <button
+                        key={item.href}
+                        type="button"
+                        onMouseDown={() => handleGuardedNavigate(item.href, item.label)}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-slate-200 hover:bg-violet-600/20 hover:text-slate-100 transition-colors cursor-pointer text-left"
+                      >
+                        <span className="font-medium">{item.label}</span>
+                        <span className="text-[10px] text-slate-400">{item.category}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          {/* Right Header Controls */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            {/* Live Credits Chip */}
             <button
+              type="button"
               onClick={() => navigate('/payment')}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-colors cursor-pointer ${
-                toolAccess.isAdmin
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                  : toolAccess.hasUsablePackage
-                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
-                  : 'border-rose-500/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20'
-              }`}
-              title="View Package & Credit Balance"
+              className="hidden md:inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-violet-500/30 bg-violet-500/10 hover:bg-violet-500/20 text-xs font-semibold text-violet-200 transition-colors cursor-pointer"
             >
-              {toolAccess.isAdmin || toolAccess.hasUsablePackage ? (
-                <Coins className="w-3.5 h-3.5" />
-              ) : (
-                <Lock className="w-3.5 h-3.5" />
-              )}
-              <span className="font-mono tabular-nums">
-                {toolAccess.isAdmin
-                  ? 'Admin Unlimited'
-                  : toolAccess.hasUsablePackage
-                  ? `${toolAccess.planName || 'Plan'} (${packageCreditTotal.toLocaleString()} Cr) · ${toolAccess.remainingCredits.toLocaleString()} Left`
-                  : toolAccess.planStatus === 'pending'
-                  ? `Pending (${toolAccess.packageCredits ? `${toolAccess.packageCredits.toLocaleString()} Cr` : 'Review'})`
-                  : 'No Package · Take Package'}
+              <Coins className="w-3.5 h-3.5 text-amber-400" />
+              <span className="tabular-nums font-mono">
+                {toolAccess.isAdmin ? 'Unlimited' : `${toolAccess.remainingCredits.toLocaleString()} Cr`}
               </span>
             </button>
+
+            {cloudConnected ? (
+              <span className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[11px] font-medium">
+                <Cloud className="w-3.5 h-3.5" />
+                <span>Supabase Synced</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void signInWithGoogle()}
+                className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-700 bg-slate-900 hover:border-violet-500/40 text-slate-300 text-[11px] font-medium cursor-pointer"
+              >
+                <Cloud className="w-3.5 h-3.5 text-violet-400" />
+                <span>Supabase Sync</span>
+              </button>
+            )}
+
             <ThemeSwitcher />
-            <button
-              onClick={() => navigate('/')}
-              className="text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-blue-500 transition-colors hidden sm:inline cursor-pointer"
-            >
-              Homepage
-            </button>
+
+            {/* Notifications Bell */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  playUiSound('click');
+                  setNotifOpen(prev => !prev);
+                  setProfileMenuOpen(false);
+                }}
+                className="relative p-2 rounded-xl border border-slate-800 bg-slate-900 text-slate-300 hover:text-slate-100 hover:border-violet-500/40 transition-colors cursor-pointer"
+                title="Announcements & Notifications"
+              >
+                <Bell className="w-4 h-4" />
+                {announcements.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-violet-600 text-[9px] font-bold text-white flex items-center justify-center tabular-nums">
+                    {announcements.length}
+                  </span>
+                )}
+              </button>
+
+              {notifOpen && (
+                <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl p-3 space-y-2.5 z-50">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                    <span className="text-xs font-bold text-slate-100">Announcements</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNotifOpen(false);
+                        navigate('/announcements');
+                      }}
+                      className="text-[11px] font-semibold text-violet-400 hover:text-violet-300 cursor-pointer"
+                    >
+                      View All
+                    </button>
+                  </div>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {announcements.slice(0, 4).map(a => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => {
+                          setNotifOpen(false);
+                          navigate('/announcements');
+                        }}
+                        className="w-full text-left p-2.5 rounded-xl bg-slate-950/60 hover:bg-violet-600/15 border border-slate-800/80 transition-colors cursor-pointer space-y-1"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-semibold text-slate-100 truncate">{a.title}</span>
+                          <span className="text-[10px] text-violet-400 shrink-0">{a.type}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 line-clamp-2">{a.message}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Profile Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setProfileMenuOpen(prev => !prev);
+                  setNotifOpen(false);
+                }}
+                className="flex items-center gap-2.5 pl-1.5 pr-2.5 py-1 rounded-xl border border-slate-800 bg-slate-900 hover:border-violet-500/40 transition-colors cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-violet-600 to-cyan-500 text-white text-xs font-bold flex items-center justify-center">
+                  {userInitial}
+                </div>
+                <span className="hidden sm:inline text-xs font-semibold text-slate-100 max-w-[110px] truncate">
+                  {user?.fullName}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+
+              {profileMenuOpen && (
+                <div className="absolute right-0 mt-2 w-52 rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl p-2 space-y-1 z-50">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      navigate('/profile');
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-200 hover:bg-violet-600/20 cursor-pointer"
+                  >
+                    <User className="w-3.5 h-3.5 text-violet-400" />
+                    <span>My Profile</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      navigate('/settings');
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-200 hover:bg-violet-600/20 cursor-pointer"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Settings</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      navigate('/payment');
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-200 hover:bg-violet-600/20 cursor-pointer"
+                  >
+                    <CreditCard className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Payments & Plans</span>
+                  </button>
+                  <div className="my-1 border-t border-slate-800" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      signOut();
+                      navigate('/');
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Logout</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
-        {/* Content Body (Full Package Lock Gate on locked routes for unpaid/zero-credit users) */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           {isCurrentRouteLocked ? (
-            <div className="max-w-5xl mx-auto py-6 space-y-7">
-              <div className="p-6 sm:p-8 rounded-3xl border border-rose-500/40 bg-gradient-to-br from-rose-950/60 via-slate-900/95 to-slate-950 shadow-2xl space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
-                      {toolAccess.planStatus === 'pending' ? (
-                        <Clock className="w-6 h-6 text-amber-400" />
-                      ) : (
-                        <Lock className="w-6 h-6" />
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-mono font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30">
-                        {toolAccess.planStatus === 'pending'
-                          ? 'Verification Pending'
-                          : 'Package Required · Account Locked'}
-                      </span>
-                      <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                        {toolAccess.planStatus === 'pending'
-                          ? 'Your Package Payment is Under Review'
-                          : toolAccess.hasActivePackage && toolAccess.remainingCredits === 0
-                          ? '0 Credits Left — Take a Package to Continue'
-                          : 'Please Take a Package First to Use Any Tool'}
-                      </h1>
-                      <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-                        {toolAccess.reason ||
-                          'Tools, Resources, Usage History, and Saved Results stay completely locked until you take a package with credits.'}
-                      </p>
-                    </div>
+            <div className="max-w-3xl mx-auto my-6 p-6 sm:p-8 rounded-3xl oe-panel space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
+                    {toolAccess.planStatus === 'pending' ? (
+                      <Clock className="w-6 h-6 text-amber-400" />
+                    ) : (
+                      <Lock className="w-6 h-6" />
+                    )}
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => navigate('/payment')}
-                    className="px-5 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 cursor-pointer shrink-0"
-                  >
-                    <CreditCard className="w-4 h-4" />
-                    <span>{toolAccess.planStatus === 'pending' ? 'Check Payment Status' : 'Take a Package Now'}</span>
-                  </button>
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-extrabold text-slate-100">
+                      {toolAccess.planStatus === 'pending'
+                        ? 'Package Payment Pending Approval'
+                        : 'Package Required to Unlock Pro Tools'}
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {toolAccess.reason ||
+                        'Please purchase and activate a credit package to unlock generator tools and resources.'}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Package Cards Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                {packages.map((pkg, idx) => (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {packages.map(pkg => (
                   <div
                     key={pkg.id}
-                    className={`p-6 rounded-3xl border flex flex-col justify-between space-y-5 shadow-xl ${
-                      idx === 1
-                        ? 'border-blue-500/60 bg-gradient-to-b from-blue-950/40 via-slate-900 to-slate-950'
-                        : 'border-slate-800 bg-slate-900/80'
-                    }`}
+                    className="p-4 rounded-2xl border border-slate-800 bg-slate-950/70 space-y-2"
                   >
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-bold uppercase tracking-wider text-blue-400">
-                          {pkg.durationLabel}
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-xs font-mono font-extrabold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                          <Coins className="w-3.5 h-3.5" />
-                          <span>{pkg.credits.toLocaleString()} Credits</span>
-                        </span>
-                      </div>
-                      <h2 className="text-xl font-extrabold text-white">{pkg.name}</h2>
-                      <p className="text-xs text-slate-400 leading-relaxed">{pkg.description}</p>
-                      <div className="flex items-baseline justify-between font-mono pt-2 border-t border-slate-800">
-                        <span className="text-2xl font-black text-white">৳{pkg.priceBdt.toLocaleString()} BDT</span>
-                        <span className="text-sm font-bold text-amber-400">${pkg.priceUsdt} USDT</span>
-                      </div>
-                      <ul className="space-y-2 pt-2">
-                        {pkg.features.map(f => (
-                          <li key={f} className="text-xs text-slate-300 flex items-start gap-2">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                            <span>{f}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/payment?pkg=${pkg.id}`)}
-                      className={`w-full py-3 rounded-2xl text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                        idx === 1
-                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-600/25'
-                          : 'bg-slate-800 hover:bg-blue-600 text-white'
-                      }`}
-                    >
-                      <span>Select {pkg.name} ({pkg.credits.toLocaleString()} Credits)</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
+                    <p className="text-xs font-bold text-slate-100">{pkg.name}</p>
+                    <p className="text-lg font-extrabold text-violet-300 font-mono tabular-nums">
+                      ৳{pkg.priceBdt.toLocaleString()} <span className="text-xs text-slate-500">/ ${pkg.priceUsdt}</span>
+                    </p>
+                    <p className="text-[11px] font-mono text-emerald-400 font-semibold">
+                      {pkg.credits.toLocaleString()} Credits
+                    </p>
                   </div>
                 ))}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => navigate('/payment')}
+                  className="btn-premium-vivid px-6 py-3 rounded-xl text-xs inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  <span>Select & Activate Package</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/dashboard')}
+                  className="btn-premium-glass px-4 py-3 rounded-xl text-xs cursor-pointer"
+                >
+                  Back to Dashboard
+                </button>
               </div>
             </div>
           ) : (
@@ -727,6 +849,55 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
           )}
         </main>
       </div>
+
+      {/* Package Upgrade Prompt Modal */}
+      {packagePromptFeature && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-lg w-full p-6 rounded-3xl oe-panel space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-violet-500/20 text-violet-300 flex items-center justify-center">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-100">Unlock {packagePromptFeature}</h3>
+                  <p className="text-[11px] text-slate-400">Active package credits required</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPackagePromptFeature(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              {toolAccess.reason || 'Activate any credit package via bKash, Nagad, Rocket, or Binance to unlock full tool access.'}
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setPackagePromptFeature(null)}
+                className="px-4 py-2 rounded-xl btn-premium-glass text-xs cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPackagePromptFeature(null);
+                  navigate('/payment');
+                }}
+                className="px-5 py-2 rounded-xl btn-premium-primary text-xs inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>View Packages</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

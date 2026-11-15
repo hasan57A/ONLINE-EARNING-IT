@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useRouter } from '../../context/RouterContext';
 import { useToast } from '../../components/ui/Toast';
 import { db } from '../../services/db';
+import { playUiSound } from '../../services/sound';
 import {
   Smartphone,
   Copy,
@@ -20,13 +21,15 @@ import {
   Terminal,
   Cpu,
   Layers,
-  Code2,
-  Zap,
   SlidersHorizontal,
-  ChevronRight,
   Scissors,
   X,
   Trash2,
+  HelpCircle,
+  Minus,
+  Plus,
+  ArrowRight,
+  Lock,
 } from 'lucide-react';
 import { RealisticToolIcon } from '../../components/ui/RealisticIcon';
 import { BrowserIcons, InAppIcons, DeviceIcons } from '../../components/ui/BrandIcons';
@@ -51,12 +54,14 @@ const DEFAULT_IN_APP_5_VERSIONS: Record<string, string[]> = {
   Twitter: ['10.35.0-release.0', '10.30.0', '10.25.0', '10.20.0', '10.15.0'],
   LinkedIn: ['4.1.890', '4.1.850', '4.1.820', '4.1.800', '4.1.750'],
   Snapchat: ['12.78.0.40', '12.70.0.35', '12.65.0.32', '12.60.0.30', '12.50.0.25'],
+  WeChat: ['8.0.48', '8.0.47', '8.0.45', '8.0.43', '8.0.40'],
 };
 
 export const UserAgentGeneratorPage: React.FC = () => {
   const { user, refreshUser } = useAuth();
   const { navigate } = useRouter();
   const { showToast } = useToast();
+  useDbSync();
 
   const devices = ['iPhone', 'iPad', 'Android', 'Windows', 'macOS'] as const;
   const browsers = ['Chrome', 'Firefox', 'Safari', 'Edge', 'Opera'] as const;
@@ -69,29 +74,26 @@ export const UserAgentGeneratorPage: React.FC = () => {
     'Twitter',
     'LinkedIn',
     'Snapchat',
+    'WeChat',
   ] as const;
 
-  useDbSync();
-
-  const deviceDetails: Record<(typeof devices)[number], { badge: string; chip: string; resolution: string }> = {
-    iPhone: { badge: 'iOS 17.4+ Mobile', chip: 'Apple A17 Pro Bionic', resolution: '393 × 852' },
-    iPad: { badge: 'iPadOS 17 Retina', chip: 'Apple M4 Ultra Core', resolution: '1024 × 1366' },
-    Android: { badge: 'Android OS Mobile', chip: 'Google Tensor G4 / Snapdragon', resolution: '412 × 915' },
-    Windows: { badge: 'Windows 11 x64', chip: 'Intel Core i9 / AMD Ryzen', resolution: '1920 × 1080' },
-    macOS: { badge: 'macOS Sonoma', chip: 'Apple Silicon ARM64 / M3', resolution: '1728 × 1117' },
+  const deviceDetails: Record<(typeof devices)[number], { badge: string; resolution: string }> = {
+    iPhone: { badge: 'iOS 17.4+', resolution: '393 × 852' },
+    iPad: { badge: 'iPadOS 17', resolution: '1024 × 1366' },
+    Android: { badge: 'Android 14', resolution: '412 × 915' },
+    Windows: { badge: 'Win 11 x64', resolution: '1920 × 1080' },
+    macOS: { badge: 'Sonoma ARM', resolution: '1728 × 1117' },
   };
 
-  // Target Selections
+  const prefs = db.getUserPreferences();
   const [device, setDevice] = useState<(typeof devices)[number]>('Windows');
   const [browser, setBrowser] = useState<string>('Chrome');
   const [inAppBrowser, setInAppBrowser] = useState<string>('None');
-  const [country, setCountry] = useState<string>('All Countries');
+  const [country, setCountry] = useState<string>(() => prefs.defaultCountry || 'All Countries');
   const [countrySearch, setCountrySearch] = useState<string>('');
-  const [quantity, setQuantity] = useState<number>(10);
+  const [quantity, setQuantity] = useState<number>(() => Math.min(1000, Math.max(1, prefs.defaultQuantity || 10)));
 
-  // 1. Browser Version ON / OFF Toggle
   const [isBrowserVersionOn, setIsBrowserVersionOn] = useState<boolean>(true);
-  // Up to 5 simultaneous browser version slots
   const [browserVersions, setBrowserVersions] = useState<string[]>([
     '124.0.6367.60',
     '123.0.6312.86',
@@ -100,9 +102,7 @@ export const UserAgentGeneratorPage: React.FC = () => {
     '120.0.6099.109',
   ]);
 
-  // 2. In-App Webview Version ON / OFF Toggle
   const [isInAppVersionOn, setIsInAppVersionOn] = useState<boolean>(false);
-  // Up to 5 simultaneous in-app version slots
   const [inAppVersions, setInAppVersions] = useState<string[]>([
     '452.0.0.38.109',
     '448.0.0.32.115',
@@ -111,15 +111,14 @@ export const UserAgentGeneratorPage: React.FC = () => {
     '430.0.0.20.108',
   ]);
 
-  // Output State
   const [generatedResults, setGeneratedResults] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [metaInfo, setMetaInfo] = useState<{ fromPool: number; procedural: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [outputTab, setOutputTab] = useState<'cards' | 'terminal'>('cards');
+  const [howItWorksOpen, setHowItWorksOpen] = useState<boolean>(false);
 
-  // Live Admin Pool Statistics (Global + Strict Per-Device)
   const adminPool = db.getUserAgents();
   const poolAvailable = adminPool.filter(u => !u.used).length;
   const poolConsumed = adminPool.filter(u => u.used).length;
@@ -131,7 +130,6 @@ export const UserAgentGeneratorPage: React.FC = () => {
     selectedDeviceAvailable > 0 ? Math.min(selectedDeviceAvailable, requestedQty) : requestedQty;
   const creditAccess = db.canUseTool(user?.id, effectiveCreditsNeeded);
 
-  // Filter Safari: Show Safari only for iPhone, iPad, macOS. Hide for Windows and Android.
   const availableBrowsers = browsers.filter(b => {
     if (b === 'Safari') {
       return device === 'iPhone' || device === 'iPad' || device === 'macOS';
@@ -140,6 +138,7 @@ export const UserAgentGeneratorPage: React.FC = () => {
   });
 
   const handleDeviceChange = (newDevice: (typeof devices)[number]) => {
+    playUiSound('click');
     setDevice(newDevice);
     if ((newDevice === 'Windows' || newDevice === 'Android') && browser === 'Safari') {
       setBrowser('Chrome');
@@ -189,7 +188,6 @@ export const UserAgentGeneratorPage: React.FC = () => {
     showToast(`Loaded 5 latest releases for ${iabName}!`, 'info');
   };
 
-  // Generation & Admin Pool Consumption Handler
   const handleGenerate = () => {
     if (!user) {
       showToast('Please sign in and take a package first to generate user agents.', 'error');
@@ -223,7 +221,6 @@ export const UserAgentGeneratorPage: React.FC = () => {
         ? inAppVersions.map(v => v.trim()).filter(Boolean)
         : [];
 
-      // Consume strictly from Admin Database Pool with 5-version cycling & cutting from pool
       const { results, fromPoolCount, generatedCount, error } = db.consumeUserAgents(user.id, {
         device,
         browser: browser !== 'None' ? browser : undefined,
@@ -245,8 +242,12 @@ export const UserAgentGeneratorPage: React.FC = () => {
       setGeneratedResults(results);
       setMetaInfo({ fromPool: fromPoolCount, procedural: generatedCount });
       refreshUser();
+      playUiSound('generate');
 
-      // Record in usage history
+      if (db.getUserPreferences().autoCopyAfterGenerate) {
+        navigator.clipboard.writeText(results.join('\n'));
+      }
+
       const versionTags: string[] = [];
       if (isBrowserVersionOn) versionTags.push(`${browser} (${activeBrowserVersions.length} versions)`);
       if (isInAppVersionOn && inAppBrowser !== 'None') versionTags.push(`${inAppBrowser} (${activeInAppVersions.length} versions)`);
@@ -282,26 +283,41 @@ export const UserAgentGeneratorPage: React.FC = () => {
   const copyAll = () => {
     if (generatedResults.length === 0) return;
     navigator.clipboard.writeText(generatedResults.join('\n'));
+    playUiSound('copy');
     showToast('Copied all user agents to clipboard!', 'success');
   };
 
   const copySingle = (ua: string, idx: number) => {
     navigator.clipboard.writeText(ua);
+    playUiSound('copy');
     setCopiedIndex(idx);
     showToast('User agent copied to clipboard!', 'success');
     setTimeout(() => setCopiedIndex(null), 1800);
   };
 
+  const outputFormat = db.getUserPreferences().defaultOutputFormat || 'TXT';
+
   const downloadTxt = () => {
     if (generatedResults.length === 0) return;
-    const blob = new Blob([generatedResults.join('\n')], { type: 'text/plain;charset=utf-8' });
+    let body = generatedResults.join('\n');
+    let mime = 'text/plain;charset=utf-8';
+    const ext = outputFormat.toLowerCase();
+    if (outputFormat === 'CSV') {
+      body = 'UserAgent\n' + generatedResults.map(u => `"${u.replace(/"/g, '""')}"`).join('\n');
+      mime = 'text/csv;charset=utf-8';
+    } else if (outputFormat === 'JSON') {
+      body = JSON.stringify(generatedResults, null, 2);
+      mime = 'application/json;charset=utf-8';
+    }
+    const blob = new Blob([body], { type: mime });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `user_agents_${device.toLowerCase()}_${country.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}.txt`;
+    link.download = `user_agents_${device.toLowerCase()}_${country.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}.${ext}`;
     link.click();
     URL.revokeObjectURL(url);
-    showToast('Downloaded user agents TXT file.', 'success');
+    playUiSound('copy');
+    showToast(`Downloaded user agents ${outputFormat} file.`, 'success');
   };
 
   const saveResults = () => {
@@ -318,7 +334,8 @@ export const UserAgentGeneratorPage: React.FC = () => {
       generatedResults.join('\n'),
       generatedResults.length
     );
-    showToast('Results saved to your dashboard!', 'success');
+    playUiSound('generate');
+    showToast('Results saved to your dashboard vault!', 'success');
   };
 
   const handleClearResults = () => {
@@ -357,512 +374,425 @@ export const UserAgentGeneratorPage: React.FC = () => {
   const ActiveInAppIcon = inAppBrowser !== 'None' ? InAppIcons[inAppBrowser] : null;
 
   return (
-    <div className="space-y-8">
-      {/* Top Workstation Banner */}
-      <div className="relative overflow-hidden rounded-3xl border border-blue-500/30 bg-gradient-to-r from-slate-950 via-blue-950/70 to-indigo-950/60 p-6 sm:p-8 shadow-2xl backdrop-blur-2xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-10 -left-10 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="flex items-start sm:items-center gap-5">
-            <div className="relative group">
+    <div className="space-y-6">
+      {/* Top Workstation Header */}
+      <div className="oe-panel rounded-3xl p-6 sm:p-7 relative overflow-hidden">
+        <div className="absolute -top-24 -right-24 w-96 h-96 bg-violet-600/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div className="flex items-start sm:items-center gap-4">
+            <div className="relative">
               <RealisticToolIcon slug="user-agent-generator" size="lg" />
-              <div className="absolute -bottom-1 -right-1 p-1 rounded-full bg-slate-950 border border-blue-500/60 shadow-lg">
+              <div className="absolute -bottom-1 -right-1 p-1 rounded-full bg-slate-950 border border-violet-400/60 shadow-lg">
                 <ActiveDeviceIcon className="w-4 h-4" />
               </div>
             </div>
-
             <div className="space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold tracking-wider uppercase">
-                <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-sm">
-                  <Database className="w-3 h-3 text-cyan-400" />
-                  Admin Database Synchronized
+              <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
+                <span className="px-2.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-400/35">
+                  Admin Pool Synchronized
                 </span>
-                <span className="text-slate-600 dark:text-slate-500">·</span>
-                <span className="px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30 font-mono text-[10px]">
-                  Version ON / OFF System
+                <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-400/30 font-mono">
+                  5-Version Cycling
                 </span>
-                <span className="text-slate-600 dark:text-slate-500">·</span>
-                <span className="px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 font-mono text-[10px]">
-                  5 Simultaneous Version Slots
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setHowItWorksOpen(true)}
+                  className="px-2.5 py-0.5 rounded-full bg-slate-900 text-slate-300 hover:text-slate-100 border border-slate-700 inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <HelpCircle className="w-3 h-3 text-violet-400" />
+                  <span>How it works?</span>
+                </button>
               </div>
-              <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight flex items-center gap-3">
-                User Agent Generator
-                <Sparkles className="w-5 h-5 text-amber-400 animate-pulse hidden sm:inline" />
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-100 tracking-tight flex items-center gap-2.5">
+                <span>User Agent Generator</span>
+                <Sparkles className="w-5 h-5 text-fuchsia-400" />
               </h1>
-              <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-                Fetches records from the Admin database pool, executes 5-version cycling when Version ON is enabled, and permanently cuts consumed items to prevent duplicate distribution.
+              <p className="text-xs sm:text-sm text-slate-400 max-w-2xl">
+                Pick device, browser engine, in-app webview, and target GEO — pulled cleanly from the synced Admin database pool and cut permanently to prevent duplicates.
               </p>
             </div>
           </div>
 
-          {/* Quick HUD Metrics */}
-          <div className="flex flex-wrap items-center gap-2.5 p-2.5 rounded-2xl border border-white/10 bg-slate-900/80 backdrop-blur-md">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800">
-              <Database className="w-4 h-4 text-blue-400" />
-              <div>
-                <div className="text-[9px] text-slate-400 font-bold uppercase">Total Uploaded</div>
-                <div className="text-xs font-bold text-white font-mono">{adminPool.length} Uploaded</div>
-              </div>
+          {/* Live Pool HUD */}
+          <div className="flex flex-wrap items-center gap-2.5 p-2 rounded-2xl border border-slate-800/90 bg-slate-950/75">
+            <div className="px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800">
+              <div className="text-[9px] text-slate-400 font-bold uppercase">Total Uploaded</div>
+              <div className="text-xs font-bold text-slate-100 font-mono tabular-nums">{adminPool.length}</div>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800">
-              <Scissors className="w-4 h-4 text-rose-400" />
-              <div>
-                <div className="text-[9px] text-slate-400 font-bold uppercase">Used / Consumed</div>
-                <div className="text-xs font-bold text-rose-400 font-mono">{poolConsumed} Cut</div>
-              </div>
+            <div className="px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800">
+              <div className="text-[9px] text-slate-400 font-bold uppercase">Used / Cut</div>
+              <div className="text-xs font-bold text-rose-400 font-mono tabular-nums">{poolConsumed}</div>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <div>
-                <div className="text-[9px] text-slate-400 font-bold uppercase">Remaining</div>
-                <div className="text-xs font-bold text-emerald-400 font-mono">{poolAvailable} Available</div>
-              </div>
+            <div className="px-3 py-1.5 rounded-xl bg-slate-900/90 border border-emerald-500/25">
+              <div className="text-[9px] text-slate-400 font-bold uppercase">Available</div>
+              <div className="text-xs font-bold text-emerald-400 font-mono tabular-nums">{poolAvailable}</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* PACKAGE & CREDIT ENFORCEMENT BANNER */}
       <PackageCreditGuard
         userId={user?.id}
         requiredCredits={effectiveCreditsNeeded}
         creditUnitLabel="1 Credit per User Agent"
       />
 
-      {/* DYNAMIC ADMIN POOL STATUS BANNER */}
+      {/* Pool Alert */}
       {poolAvailable === 0 || selectedDeviceAvailable === 0 ? (
-        <div className="p-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 text-xs flex items-start justify-between gap-3 shadow-lg">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0 mt-0.5">
-              <Database className="w-4 h-4" />
-            </div>
+        <div className="p-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 text-xs flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Database className="w-5 h-5 text-amber-400 shrink-0" />
             <div>
-              <h4 className="font-bold text-white text-xs">
+              <h4 className="font-bold text-slate-100">
                 {poolAvailable === 0
                   ? 'Admin Database Pool is Empty (0 Available)'
                   : `0 Unused "${device}" User Agents Available`}
               </h4>
-              <p className="text-amber-200/80 leading-relaxed mt-0.5">
-                {poolAvailable === 0 ? (
-                  <>
-                    User agents <strong>only generate</strong> from Admin Panel uploads. Total uploaded: <strong className="font-mono tabular-nums">{adminPool.length}</strong> · Used: <strong className="font-mono tabular-nums">{poolConsumed}</strong>.
-                  </>
-                ) : (
-                  <>
-                    Strict device matching is active: only User Agents imported under <strong>{device}</strong> can be generated for {device}. Uploaded for {device}: <strong className="font-mono tabular-nums">{selectedDeviceStats.total}</strong> · Used: <strong className="font-mono tabular-nums">{selectedDeviceStats.used}</strong> · Available: <strong>0</strong>.
-                  </>
-                )}
+              <p className="text-amber-300 text-[11px] mt-0.5">
+                Strict device isolation active. {device} Available: <strong className="font-mono">{selectedDeviceAvailable}</strong> / Total: <strong className="font-mono">{selectedDeviceStats.total}</strong>.
               </p>
             </div>
           </div>
-          <span className="font-mono text-[10px] font-bold text-amber-400 bg-amber-950/80 px-2.5 py-1 rounded-lg border border-amber-500/30 whitespace-nowrap">
+          <span className="font-mono text-[10px] font-bold text-amber-300 bg-amber-500/15 px-2.5 py-1 rounded-lg border border-amber-500/30 whitespace-nowrap">
             Upload Required
           </span>
         </div>
       ) : (
-        <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 text-xs flex items-center justify-between gap-3 shadow-lg">
+        <div className="p-3.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 text-xs flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 shrink-0">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-            <div>
-              <h4 className="font-bold text-white text-xs font-mono tabular-nums">
-                {device} Pool Ready ({selectedDeviceAvailable} Available · {selectedDeviceStats.used} Used · {selectedDeviceStats.total} Uploaded)
-              </h4>
-              <p className="text-emerald-200/80 text-[11px] mt-0.5">
-                Total Master Pool: {adminPool.length} Uploaded · {poolConsumed} Cut · {poolAvailable} Remaining. Strict device isolation active.
-              </p>
-            </div>
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="text-slate-200">
+              <strong className="font-mono">{device}</strong> pool ready —{' '}
+              <strong className="font-mono text-emerald-300">{selectedDeviceAvailable}</strong> unused UAs available ({selectedDeviceStats.used} consumed).
+            </span>
           </div>
-          <span className="font-mono text-[11px] font-bold text-emerald-300 bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-500/30 whitespace-nowrap">
+          <span className="font-mono text-[10px] font-bold text-emerald-300 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30">
             Pool Active
           </span>
         </div>
       )}
 
-      {/* WORKSTATION CONTROLS & OUTPUT GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left Column: All Options with VERSION ON/OFF Systems */}
-        <div className="lg:col-span-5 space-y-6">
-          <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-blue-500" />
-                <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
-                  Workstation Configuration
-                </h2>
+      {/* 4-Card Selection Matrix matching Images 1 & 8 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* Card 1: Device */}
+        <div className="oe-panel rounded-3xl p-5 space-y-3.5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-100 flex items-center gap-1.5">
+              <Cpu className="w-3.5 h-3.5 text-violet-400" />
+              <span>1. Device Type</span>
+            </h2>
+            <span className="text-[10px] font-mono text-violet-300 font-bold">{selectedDeviceAvailable} avail</span>
+          </div>
+
+          <div className="space-y-2">
+            {devices.map(d => {
+              const DeviceIconComponent = DeviceIcons[d];
+              const isSelected = device === d;
+              const dStat = deviceStats[d];
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => handleDeviceChange(d)}
+                  className={`w-full p-2.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                    isSelected
+                      ? 'border-violet-500 bg-gradient-to-r from-violet-600/25 to-indigo-600/15 text-slate-100 shadow-[0_0_20px_-6px_rgba(var(--oe-accent-rgb),0.55)]'
+                      : 'border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <DeviceIconComponent className="w-5 h-5" />
+                    <div>
+                      <div className="text-xs font-bold">{d}</div>
+                      <div className="text-[10px] font-mono text-slate-400">{deviceDetails[d].badge}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                        dStat.available > 0 ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-800 text-slate-500'
+                      }`}
+                    >
+                      {dStat.available}
+                    </span>
+                    {isSelected && <Check className="w-3.5 h-3.5 text-violet-300" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Card 2: Browser Engine + Version ON/OFF + 5 Slots */}
+        <div className="oe-panel rounded-3xl p-5 space-y-3.5">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-100 flex items-center gap-1.5">
+              <Globe2 className="w-3.5 h-3.5 text-cyan-400" />
+              <span>2. Browser</span>
+            </h2>
+            <button
+              type="button"
+              onClick={() => setIsBrowserVersionOn(!isBrowserVersionOn)}
+              className={`px-2.5 py-1 rounded-full text-[10px] font-bold font-mono cursor-pointer border ${
+                isBrowserVersionOn
+                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/50'
+                  : 'bg-slate-900 text-slate-500 border-slate-700'
+              }`}
+            >
+              Ver: {isBrowserVersionOn ? 'ON' : 'OFF'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1.5">
+            {availableBrowsers.map(b => {
+              const BrowserIconComponent = BrowserIcons[b];
+              const isSelected = browser === b;
+              return (
+                <button
+                  key={b}
+                  type="button"
+                  onClick={() => {
+                    playUiSound('click');
+                    setBrowser(b);
+                    loadDefaultBrowserVersions(b);
+                  }}
+                  className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                    isSelected
+                      ? 'border-cyan-400 bg-cyan-500/15 text-slate-100 font-bold shadow-[0_0_16px_-6px_rgba(34,211,238,0.65)]'
+                      : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-slate-100'
+                  }`}
+                >
+                  <BrowserIconComponent className="w-4 h-4" />
+                  <span className="text-[10px] truncate w-full">{b}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {isBrowserVersionOn ? (
+            <div className="p-3 rounded-2xl border border-cyan-500/25 bg-slate-950/80 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="font-bold text-slate-100 flex items-center gap-1">
+                  <ActiveBrowserIcon className="w-3 h-3" />
+                  <span>{browser} 5 Slots</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => loadDefaultBrowserVersions(browser)}
+                  className="text-cyan-400 hover:underline font-mono cursor-pointer"
+                >
+                  Reset 5 Builds
+                </button>
               </div>
-              <span className="text-[10px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                5-Version Cycling
+              {browserVersions.map((ver, idx) => (
+                <input
+                  key={idx}
+                  type="text"
+                  value={ver}
+                  onChange={e => handleBrowserVersionChange(idx, e.target.value)}
+                  placeholder={`Slot #${idx + 1}`}
+                  className="w-full px-2.5 py-1 rounded-lg border text-[11px] font-mono text-cyan-300"
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 text-[11px] text-slate-400">
+              Original pool browser versions preserved.
+            </div>
+          )}
+        </div>
+
+        {/* Card 3: In-App Browser (Incl. WeChat) */}
+        <div className="oe-panel rounded-3xl p-5 space-y-3.5">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-100 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-fuchsia-400" />
+              <span>3. In-App App</span>
+            </h2>
+            <button
+              type="button"
+              onClick={() => setIsInAppVersionOn(!isInAppVersionOn)}
+              className={`px-2.5 py-1 rounded-full text-[10px] font-bold font-mono cursor-pointer border ${
+                isInAppVersionOn
+                  ? 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-400/50'
+                  : 'bg-slate-900 text-slate-500 border-slate-700'
+              }`}
+            >
+              Ver: {isInAppVersionOn ? 'ON' : 'OFF'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1.5">
+            {inAppBrowsers.map(iab => {
+              const InAppIconComponent = iab !== 'None' ? InAppIcons[iab] : null;
+              const isSelected = inAppBrowser === iab;
+              return (
+                <button
+                  key={iab}
+                  type="button"
+                  onClick={() => {
+                    playUiSound('click');
+                    setInAppBrowser(iab);
+                    if (iab !== 'None') loadDefaultInAppVersions(iab);
+                  }}
+                  className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                    isSelected
+                      ? 'border-fuchsia-400 bg-fuchsia-500/15 text-slate-100 font-bold shadow-[0_0_16px_-6px_rgba(232,121,249,0.6)]'
+                      : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-slate-100'
+                  }`}
+                >
+                  {InAppIconComponent ? (
+                    <InAppIconComponent className="w-4 h-4" />
+                  ) : (
+                    <Globe2 className="w-4 h-4 text-slate-400" />
+                  )}
+                  <span className="text-[9px] truncate w-full">{iab}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {isInAppVersionOn && inAppBrowser !== 'None' ? (
+            <div className="p-3 rounded-2xl border border-fuchsia-500/25 bg-slate-950/80 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="font-bold text-slate-100 flex items-center gap-1">
+                  {ActiveInAppIcon && <ActiveInAppIcon className="w-3 h-3" />}
+                  <span>{inAppBrowser} 5 Slots</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => loadDefaultInAppVersions(inAppBrowser)}
+                  className="text-fuchsia-300 hover:underline font-mono cursor-pointer"
+                >
+                  Reset 5 Builds
+                </button>
+              </div>
+              {inAppVersions.map((ver, idx) => (
+                <input
+                  key={idx}
+                  type="text"
+                  value={ver}
+                  onChange={e => handleInAppVersionChange(idx, e.target.value)}
+                  placeholder={`Slot #${idx + 1}`}
+                  className="w-full px-2.5 py-1 rounded-lg border text-[11px] font-mono text-fuchsia-300"
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 text-[11px] text-slate-400">
+              {isInAppVersionOn ? 'Pick an app tile to customize its 5 version slots.' : 'In-App override disabled.'}
+            </div>
+          )}
+        </div>
+
+        {/* Card 4: Country + Quantity Stepper + Generate CTA */}
+        <div className="oe-panel rounded-3xl p-5 flex flex-col justify-between space-y-4">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-xs font-extrabold uppercase tracking-wider text-slate-100 flex items-center gap-1.5">
+                <Globe2 className="w-3.5 h-3.5 text-indigo-400" />
+                <span>4. Country / GEO</span>
+              </h2>
+              <span className="text-[10px] font-mono text-indigo-300 truncate max-w-[110px]">
+                {country === 'No Language System'
+                  ? 'No Lang'
+                  : activeGeo && activeGeo.code !== 'ALL'
+                  ? `${activeGeo.flag} ${activeGeo.locale}`
+                  : '🌐 Global'}
               </span>
             </div>
 
-            {/* 1. TARGET DEVICE */}
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  <Cpu className="w-3.5 h-3.5 text-blue-400" />
-                  <span>1. Target Device (Strict Match)</span>
-                </label>
-                <span className="text-[11px] font-mono text-blue-400 font-semibold tabular-nums">
-                  {device} · {selectedDeviceAvailable} avail
-                </span>
+            <div className="flex items-center gap-1.5">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={countrySearch}
+                  onChange={e => setCountrySearch(e.target.value)}
+                  placeholder="Search country..."
+                  className="w-full pl-8 pr-2.5 py-1.5 rounded-xl border text-[11px] text-slate-100"
+                />
               </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {devices.map(d => {
-                  const DeviceIconComponent = DeviceIcons[d];
-                  const isSelected = device === d;
-                  const details = deviceDetails[d];
-                  const dStat = deviceStats[d];
-
-                  return (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => handleDeviceChange(d)}
-                      className={`relative p-2.5 rounded-xl text-left border transition-all cursor-pointer flex flex-col justify-between group ${
-                        isSelected
-                          ? 'border-blue-500 bg-blue-600/15 text-white font-bold ring-1 ring-blue-500/40 shadow-sm'
-                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 hover:border-slate-400 dark:hover:border-slate-700 text-slate-400'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between mb-1.5">
-                        <DeviceIconComponent className="w-4 h-4" />
-                        <span
-                          className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded tabular-nums ${
-                            dStat.available > 0
-                              ? 'bg-emerald-500/15 text-emerald-400'
-                              : 'bg-slate-800 text-slate-500'
-                          }`}
-                        >
-                          {dStat.available}/{dStat.total}
-                        </span>
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
-                          <span>{d}</span>
-                          {isSelected && <Check className="w-3 h-3 text-blue-400 stroke-[3]" />}
-                        </div>
-                        <div className="text-[9px] font-mono text-slate-400">{details.badge}</div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* 2. WEB BROWSER ENGINE WITH VERSION ON / OFF SYSTEM */}
-            <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  <Globe2 className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>2. Web Browser Engine</span>
-                </label>
-
-                {/* VERSION ON / OFF TOGGLE SWITCH */}
+              {device === 'Android' && (
                 <button
                   type="button"
-                  onClick={() => setIsBrowserVersionOn(!isBrowserVersionOn)}
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold font-mono transition-all cursor-pointer flex items-center gap-1.5 border shadow-sm ${
-                    isBrowserVersionOn
-                      ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-cyan-500/20'
-                      : 'bg-slate-200 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-700'
+                  onClick={() =>
+                    setCountry(country === 'No Language System' ? 'All Countries' : 'No Language System')
+                  }
+                  className={`px-2 py-1.5 rounded-xl text-[10px] font-mono font-bold border cursor-pointer shrink-0 ${
+                    country === 'No Language System'
+                      ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
+                      : 'border-slate-700 text-slate-400'
                   }`}
-                  title="Toggle Browser Version replacement ON/OFF"
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full ${isBrowserVersionOn ? 'bg-slate-950 animate-pulse' : 'bg-slate-500'}`} />
-                  <span>VERSION: {isBrowserVersionOn ? 'ON' : 'OFF'}</span>
+                  No Lang
                 </button>
-              </div>
-
-              {/* Browser Selection Grid */}
-              <div className="grid grid-cols-5 gap-1.5">
-                {availableBrowsers.map(b => {
-                  const BrowserIconComponent = BrowserIcons[b];
-                  const isSelected = browser === b;
-                  return (
-                    <button
-                      key={b}
-                      type="button"
-                      onClick={() => {
-                        setBrowser(b);
-                        loadDefaultBrowserVersions(b);
-                      }}
-                      className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
-                        isSelected
-                          ? 'border-cyan-500 bg-cyan-600/20 text-white font-bold ring-1 ring-cyan-500/40 shadow-sm'
-                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 text-slate-400 hover:border-slate-400'
-                      }`}
-                    >
-                      <BrowserIconComponent className="w-4 h-4" />
-                      <span className="text-[10px] truncate w-full">{b}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* 5 BROWSER VERSION SLOTS (Shown when Version is ON) */}
-              {isBrowserVersionOn ? (
-                <div className="p-3.5 rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/30 via-slate-900/90 to-slate-950 shadow-md space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-white">
-                      <ActiveBrowserIcon className="w-3.5 h-3.5" />
-                      <span>{browser} 5 Target Versions (Cycling)</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => loadDefaultBrowserVersions(browser)}
-                      className="text-[10px] font-mono text-cyan-400 hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <Sparkles className="w-3 h-3 text-cyan-400" />
-                      <span>Load 5 Latest Builds</span>
-                    </button>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    {browserVersions.map((ver, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-slate-400 w-12 shrink-0">
-                          Slot #{idx + 1}
-                        </span>
-                        <input
-                          type="text"
-                          value={ver}
-                          onChange={e => handleBrowserVersionChange(idx, e.target.value)}
-                          placeholder={`Version slot ${idx + 1}...`}
-                          className="flex-1 px-3 py-1.5 rounded-xl border border-cyan-500/30 bg-slate-950 font-mono text-xs text-cyan-300 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400"
-                        />
-                        {ver && (
-                          <button
-                            type="button"
-                            onClick={() => handleBrowserVersionChange(idx, '')}
-                            className="p-1 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-slate-300 cursor-pointer"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/50 text-[11px] font-mono text-slate-500 flex items-center justify-between">
-                  <span>Browser Version: OFF</span>
-                  <span className="text-slate-400">Original database version will be preserved</span>
-                </div>
               )}
             </div>
 
-            {/* 3. IN-APP WEBVIEW (SOCIAL APPS) WITH VERSION ON / OFF SYSTEM */}
-            <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>3. In-App Webview (Social Apps)</span>
-                </label>
-
-                {/* IN-APP VERSION ON / OFF TOGGLE SWITCH */}
-                <button
-                  type="button"
-                  onClick={() => setIsInAppVersionOn(!isInAppVersionOn)}
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold font-mono transition-all cursor-pointer flex items-center gap-1.5 border shadow-sm ${
-                    isInAppVersionOn
-                      ? 'bg-indigo-600 text-white border-indigo-400 shadow-indigo-500/20'
-                      : 'bg-slate-200 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-700'
-                  }`}
-                  title="Toggle In-App Webview Version replacement ON/OFF"
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${isInAppVersionOn ? 'bg-white animate-pulse' : 'bg-slate-500'}`} />
-                  <span>VERSION: {isInAppVersionOn ? 'ON' : 'OFF'}</span>
-                </button>
-              </div>
-
-              {/* In-App App Selection Grid */}
-              <div className="grid grid-cols-4 gap-1.5">
-                {inAppBrowsers.map(iab => {
-                  const InAppIconComponent = iab !== 'None' ? InAppIcons[iab] : null;
-                  const isSelected = inAppBrowser === iab;
-                  return (
-                    <button
-                      key={iab}
-                      type="button"
-                      onClick={() => {
-                        setInAppBrowser(iab);
-                        if (iab !== 'None') loadDefaultInAppVersions(iab);
-                      }}
-                      className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
-                        isSelected
-                          ? 'border-indigo-500 bg-indigo-600/20 text-white font-bold ring-1 ring-indigo-500/40 shadow-sm'
-                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 text-slate-400 hover:border-slate-400'
-                      }`}
-                    >
-                      {InAppIconComponent ? (
-                        <InAppIconComponent className="w-4 h-4" />
-                      ) : (
-                        <Globe2 className="w-4 h-4 text-slate-400" />
-                      )}
-                      <span className="text-[9px] truncate w-full">{iab}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* 5 IN-APP VERSION SLOTS (Shown when Version is ON and App is selected) */}
-              {isInAppVersionOn && inAppBrowser !== 'None' ? (
-                <div className="p-3.5 rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-950/30 via-slate-900/90 to-slate-950 shadow-md space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-white">
-                      {ActiveInAppIcon && <ActiveInAppIcon className="w-3.5 h-3.5" />}
-                      <span>{inAppBrowser} 5 Target Versions (Cycling)</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => loadDefaultInAppVersions(inAppBrowser)}
-                      className="text-[10px] font-mono text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <Sparkles className="w-3 h-3 text-indigo-400" />
-                      <span>Load 5 Latest Releases</span>
-                    </button>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    {inAppVersions.map((ver, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-slate-400 w-12 shrink-0">
-                          Slot #{idx + 1}
-                        </span>
-                        <input
-                          type="text"
-                          value={ver}
-                          onChange={e => handleInAppVersionChange(idx, e.target.value)}
-                          placeholder={`In-App Version slot ${idx + 1}...`}
-                          className="flex-1 px-3 py-1.5 rounded-xl border border-indigo-500/30 bg-slate-950 font-mono text-xs text-indigo-300 placeholder:text-slate-600 focus:outline-none focus:border-indigo-400"
-                        />
-                        {ver && (
-                          <button
-                            type="button"
-                            onClick={() => handleInAppVersionChange(idx, '')}
-                            className="p-1 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-slate-300 cursor-pointer"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-950/50 text-[11px] font-mono text-slate-500 flex items-center justify-between">
-                  <span>In-App Version: {isInAppVersionOn ? 'Select an app above' : 'OFF'}</span>
-                  <span className="text-slate-400">Original in-app token preserved</span>
-                </div>
-              )}
+            <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
+              {filteredCountries.map(c => {
+                const isSelected = country === c.name;
+                return (
+                  <button
+                    key={c.name}
+                    type="button"
+                    onClick={() => setCountry(c.name)}
+                    className={`p-1.5 rounded-xl text-left border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'border-violet-500 bg-violet-500/20 text-slate-100 font-bold'
+                        : 'border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-sm shrink-0">{c.flag}</span>
+                    <span className="text-[10px] truncate">{c.name}</span>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* 4. ALL COUNTRY / GEO TARGET LANGUAGE */}
-            <div className="space-y-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <div className="flex items-center justify-between gap-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  <Globe2 className="w-3.5 h-3.5 text-blue-400" />
-                  <span>4. All Country / GEO Target Language</span>
-                </label>
-                <span className="text-[10px] text-blue-400 font-mono truncate">
-                  {country === 'No Language System'
-                    ? 'No Language Tag'
-                    : activeGeo && activeGeo.code !== 'ALL'
-                    ? `${activeGeo.flag} ${activeGeo.locale}`
-                    : '🌐 All GEOs'}
+            {/* Quantity Stepper */}
+            <div className="pt-2 border-t border-slate-800/80 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-violet-400" />
+                  <span>Quantity</span>
                 </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={countrySearch}
-                    onChange={e => setCountrySearch(e.target.value)}
-                    placeholder="Search country or language (e.g. Bangladesh, bn-BD, en-US)..."
-                    className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-[11px] text-slate-900 dark:text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                {device === 'Android' && (
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() =>
-                      setCountry(country === 'No Language System' ? 'All Countries' : 'No Language System')
-                    }
-                    className={`px-2.5 py-1.5 rounded-xl text-[10px] font-mono font-bold border transition-colors cursor-pointer shrink-0 ${
-                      country === 'No Language System'
-                        ? 'border-emerald-500 bg-emerald-500/15 text-emerald-400'
-                        : 'border-slate-200 dark:border-slate-800 text-slate-400 hover:text-white'
-                    }`}
-                    title="Strip language tags from Android UAs"
+                    onClick={() => setQuantity(q => Math.max(1, q - 5))}
+                    className="w-6 h-6 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center text-slate-300 hover:text-slate-100 cursor-pointer"
                   >
-                    No Lang
+                    <Minus className="w-3 h-3" />
                   </button>
-                )}
+                  <input
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={quantity}
+                    onChange={e => setQuantity(Math.min(1000, Math.max(1, Number(e.target.value) || 1)))}
+                    className="w-14 text-center py-1 rounded-lg border text-xs font-mono font-bold text-slate-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setQuantity(q => Math.min(1000, q + 5))}
+                    className="w-6 h-6 rounded-lg bg-slate-900 border border-slate-700 flex items-center justify-center text-slate-300 hover:text-slate-100 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                </div>
               </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-44 overflow-y-auto pr-1">
-                {filteredCountries.map(c => {
-                  const isSelected = country === c.name;
-                  return (
-                    <button
-                      key={c.name}
-                      type="button"
-                      onClick={() => setCountry(c.name)}
-                      className={`p-1.5 rounded-xl text-left border transition-all cursor-pointer flex items-center gap-1.5 ${
-                        isSelected
-                          ? 'border-blue-500 bg-blue-950/50 text-white font-bold ring-1 ring-blue-500/50'
-                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 hover:border-slate-400'
-                      }`}
-                    >
-                      <span className="text-sm shrink-0">{c.flag}</span>
-                      <div className="min-w-0">
-                        <div className="text-[10px] font-semibold truncate">{c.name}</div>
-                        <div className="text-[9px] font-mono text-slate-400 truncate">{c.locale}</div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* 5. QUANTITY BATCH SLIDER (Max 1,000) */}
-            <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Batch Quantity (Max 1,000)</span>
-                </label>
-                <span className="text-xs font-mono font-bold text-cyan-400 bg-cyan-500/10 px-2.5 py-0.5 rounded-lg border border-cyan-500/20 tabular-nums">
-                  {quantity} UAs
-                </span>
-              </div>
-
-              <input
-                type="range"
-                min={1}
-                max={1000}
-                value={quantity}
-                onChange={e => setQuantity(Number(e.target.value))}
-                className="w-full h-2.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500"
-              />
-
-              <div className="grid grid-cols-6 gap-1.5">
-                {[10, 50, 100, 250, 500, 1000].map(val => (
+              <div className="grid grid-cols-5 gap-1">
+                {[10, 50, 100, 250, 500].map(val => (
                   <button
                     key={val}
                     type="button"
                     onClick={() => setQuantity(val)}
-                    className={`py-1.5 text-[10px] font-mono rounded-lg transition-all cursor-pointer border ${
+                    className={`py-1 rounded-lg text-[10px] font-mono border cursor-pointer ${
                       quantity === val
-                        ? 'border-cyan-500 bg-cyan-500/20 text-cyan-300 font-bold'
-                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-100/50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400'
+                        ? 'border-violet-500 bg-violet-500/20 text-violet-200 font-bold'
+                        : 'border-slate-800 bg-slate-950/60 text-slate-400'
                     }`}
                   >
                     {val}
@@ -870,262 +800,240 @@ export const UserAgentGeneratorPage: React.FC = () => {
                 ))}
               </div>
             </div>
-
-            {/* GENERATE TRIGGER BUTTON */}
-            <motion.button
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleGenerate}
-              disabled={isGenerating}
-              className={`w-full py-4 rounded-2xl font-extrabold text-xs tracking-wider uppercase shadow-xl flex items-center justify-center gap-3 transition-all cursor-pointer ${
-                !creditAccess.allowed
-                  ? 'bg-rose-950/70 hover:bg-rose-900/80 text-rose-200 border border-rose-500/40'
-                  : selectedDeviceAvailable === 0
-                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
-                  : 'bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:via-blue-500 hover:to-indigo-500 text-slate-950 shadow-cyan-500/25'
-              }`}
-            >
-              <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
-              <span>
-                {isGenerating
-                  ? `Generating ${quantity} Signatures...`
-                  : !creditAccess.allowed
-                  ? creditAccess.hasUsablePackage
-                    ? `Insufficient Credits (${creditAccess.remainingCredits} left) — Click for Packages`
-                    : 'Package Required — Click to Take a Package'
-                  : selectedDeviceAvailable === 0
-                  ? `No ${device} User Agents in Pool`
-                  : `Generate & Cut ${effectiveCreditsNeeded} ${device} UAs${
-                      creditAccess.isAdmin ? '' : ` (${effectiveCreditsNeeded} Cr)`
-                    }`}
-              </span>
-            </motion.button>
           </div>
+
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={isGenerating}
+            className={`w-full py-3.5 px-4 rounded-2xl text-xs font-extrabold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer ${
+              !creditAccess.allowed || selectedDeviceAvailable === 0
+                ? 'bg-slate-800 text-slate-300 border border-slate-700'
+                : 'btn-premium-vivid'
+            }`}
+          >
+            <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
+            <span>
+              {isGenerating
+                ? 'Generating...'
+                : !creditAccess.allowed
+                ? creditAccess.hasUsablePackage
+                  ? `Need ${effectiveCreditsNeeded} Cr`
+                  : 'Unlock Package'
+                : selectedDeviceAvailable === 0
+                ? `No ${device} UAs in Pool`
+                : `Generate User Agents`}
+            </span>
+            {!isGenerating && creditAccess.allowed && selectedDeviceAvailable > 0 && (
+              <ArrowRight className="w-4 h-4" />
+            )}
+          </button>
         </div>
+      </div>
 
-        {/* Right Column: Output Workstation Console */}
-        <div className="lg:col-span-7 space-y-4">
-          <div className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl space-y-5">
-            {/* Header Toolbar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                    Generated Console
-                  </h3>
-                  <span className="text-xs px-2 py-0.5 rounded-full font-mono font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                    {generatedResults.length} Ready
-                  </span>
-                </div>
-                <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-2">
-                  {metaInfo ? (
-                    <span>
-                      {metaInfo.fromPool > 0 && (
-                        <strong className="text-emerald-400">
-                          {metaInfo.fromPool} retrieved & cut from Admin Database Pool ·{' '}
-                        </strong>
-                      )}
-                      Device: {device} · Browser: {browser}
-                    </span>
-                  ) : (
-                    <span>Ready for generation</span>
-                  )}
-                </div>
-              </div>
+      {/* Results Table Console (Images 1 & 8) */}
+      <div className="oe-panel rounded-3xl p-6 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+          <div className="flex items-center gap-3">
+            <h3 className="text-base font-bold text-slate-100">Generated User Agents Console</h3>
+            <span className="px-2.5 py-0.5 rounded-full bg-violet-500/20 border border-violet-400/35 text-violet-200 text-xs font-mono font-bold">
+              {generatedResults.length} Ready
+            </span>
+            {metaInfo && metaInfo.fromPool > 0 && (
+              <span className="text-[11px] font-mono text-emerald-400">
+                ({metaInfo.fromPool} cut from pool)
+              </span>
+            )}
+          </div>
 
-              {/* View Switcher + Clear Console Button */}
-              {generatedResults.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center bg-slate-100 dark:bg-slate-950 p-0.5 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => setOutputTab('cards')}
-                      className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
-                        outputTab === 'cards'
-                          ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
-                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <Layers className="w-3 h-3" />
-                      Cards
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOutputTab('terminal')}
-                      className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
-                        outputTab === 'terminal'
-                          ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
-                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <Terminal className="w-3 h-3" />
-                      Raw
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleClearResults}
-                    className="px-2.5 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                    title="Clear generated output"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Clear</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Keyword Search Filter */}
+          <div className="flex flex-wrap items-center gap-2">
             {generatedResults.length > 0 && (
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Filter generated results by keyword or version..."
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-xs text-slate-900 dark:text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-500 font-mono shadow-inner"
-                />
+              <div className="flex items-center bg-slate-950 p-0.5 rounded-xl border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setOutputTab('cards')}
+                  className={`px-3 py-1 rounded-lg text-[11px] font-bold cursor-pointer ${
+                    outputTab === 'cards' ? 'bg-violet-600 text-white' : 'text-slate-400'
+                  }`}
+                >
+                  Rows
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOutputTab('terminal')}
+                  className={`px-3 py-1 rounded-lg text-[11px] font-bold cursor-pointer ${
+                    outputTab === 'terminal' ? 'bg-violet-600 text-white' : 'text-slate-400'
+                  }`}
+                >
+                  Raw TXT
+                </button>
               </div>
             )}
-
-            {/* Output Display Area */}
-            {generatedResults.length === 0 ? (
-              <div className="h-[460px] rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-950/40 flex flex-col items-center justify-center p-8 text-center space-y-3">
-                <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 shadow-inner">
-                  <Smartphone className="w-12 h-12 stroke-[1.5]" />
-                </div>
-                <div className="space-y-1">
-                  <p className="font-bold text-sm text-slate-700 dark:text-slate-200">
-                    Console Ready for Generation
-                  </p>
-                  <p className="max-w-sm text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Select your device, configure the 5-version slots with Version ON/OFF switches, and click <strong>Generate</strong> to retrieve and cut records from the database pool.
-                  </p>
-                </div>
-              </div>
-            ) : outputTab === 'cards' ? (
-              <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
-                <AnimatePresence>
-                  {filteredResults.map((ua, idx) => (
-                    <motion.div
-                      key={idx}
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.15, delay: Math.min(idx * 0.02, 0.3) }}
-                      className="group p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-cyan-500/50 bg-slate-50/70 dark:bg-slate-950/70 transition-all space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 font-bold">
-                            #{idx + 1}
-                          </span>
-                          <span className="text-[10px] font-mono text-slate-400">
-                            {device} · {browser} {inAppBrowser !== 'None' && `+ ${inAppBrowser}`}
-                          </span>
-                          <span className="text-[10px] font-mono text-slate-500">
-                            ({ua.length} chars)
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => copySingle(ua, idx)}
-                            className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
-                              copiedIndex === idx
-                                ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400'
-                                : 'border-slate-200 dark:border-slate-800 hover:border-cyan-500 bg-white dark:bg-slate-900 text-slate-400 hover:text-cyan-400'
-                            }`}
-                            title="Copy this User Agent"
-                          >
-                            {copiedIndex === idx ? (
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveSingleResult(ua, idx)}
-                            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-rose-500/50 bg-white dark:bg-slate-900 text-slate-400 hover:text-rose-400 transition-all cursor-pointer"
-                            title="Clear this User Agent from list"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="font-mono text-xs text-slate-800 dark:text-cyan-300 break-all select-all leading-relaxed bg-white/60 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200/50 dark:border-slate-800/50 group-hover:border-cyan-500/30 transition-colors">
-                        {ua}
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="relative">
-                  <textarea
-                    readOnly
-                    rows={16}
-                    value={filteredResults.join('\n')}
-                    className="w-full p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-950 font-mono text-xs text-cyan-300 focus:outline-none resize-none leading-relaxed selection:bg-cyan-500/30 shadow-inner"
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono px-1">
-                  <span>Showing {filteredResults.length} of {generatedResults.length} records</span>
-                  <span>UTF-8 Raw Output</span>
-                </div>
-              </div>
-            )}
-
-            {/* Action Bar Buttons */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-              <button
-                type="button"
-                onClick={copyAll}
-                disabled={generatedResults.length === 0}
-                className="py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-cyan-500 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-40 cursor-pointer shadow-sm"
-              >
-                <Copy className="w-4 h-4 text-cyan-400" />
-                <span>Copy All ({generatedResults.length})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={downloadTxt}
-                disabled={generatedResults.length === 0}
-                className="py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-emerald-500 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-40 cursor-pointer shadow-sm"
-              >
-                <Download className="w-4 h-4 text-emerald-400" />
-                <span>Download TXT</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={saveResults}
-                disabled={generatedResults.length === 0}
-                className="py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-cyan-600/30 transition-all disabled:opacity-40 cursor-pointer"
-              >
-                <Bookmark className="w-3.5 h-3.5" />
-                <span>Save Results</span>
-              </button>
-
+            <button
+              type="button"
+              onClick={copyAll}
+              disabled={generatedResults.length === 0}
+              className="btn-premium-primary px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 disabled:opacity-40 cursor-pointer"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copy All</span>
+            </button>
+            <button
+              type="button"
+              onClick={downloadTxt}
+              disabled={generatedResults.length === 0}
+              className="btn-premium-cyan px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 disabled:opacity-40 cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download .{outputFormat.toLowerCase()}</span>
+            </button>
+            <button
+              type="button"
+              onClick={saveResults}
+              disabled={generatedResults.length === 0}
+              className="btn-premium-emerald px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 disabled:opacity-40 cursor-pointer"
+            >
+              <Bookmark className="w-3.5 h-3.5" />
+              <span>Save</span>
+            </button>
+            {generatedResults.length > 0 && (
               <button
                 type="button"
                 onClick={handleClearResults}
-                disabled={generatedResults.length === 0}
-                className="py-3 px-4 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-40 cursor-pointer shadow-sm"
+                className="px-3 py-2 rounded-xl border border-rose-500/35 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
               >
-                <Trash2 className="w-4 h-4" />
-                <span>Clear All</span>
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear</span>
               </button>
-            </div>
+            )}
           </div>
         </div>
+
+        {generatedResults.length > 0 && (
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Filter generated strings by version, OS, or keyword..."
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl border text-xs font-mono text-slate-100"
+            />
+          </div>
+        )}
+
+        {generatedResults.length === 0 ? (
+          <div className="py-16 rounded-2xl border-2 border-dashed border-slate-800 bg-slate-950/40 flex flex-col items-center justify-center text-center space-y-3">
+            <div className="w-14 h-14 rounded-2xl bg-violet-500/15 border border-violet-400/30 flex items-center justify-center text-violet-300">
+              <Smartphone className="w-7 h-7" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-slate-100">Ready to Forge Fresh User Agents</p>
+              <p className="text-xs text-slate-400 max-w-md">
+                Configure your Device, Browser, In-App Webview, Country, and Quantity above, then press{' '}
+                <strong className="text-violet-300">Generate User Agents</strong>.
+              </p>
+            </div>
+          </div>
+        ) : outputTab === 'cards' ? (
+          <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
+            <AnimatePresence>
+              {filteredResults.map((ua, idx) => (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.15, delay: Math.min(idx * 0.015, 0.25) }}
+                  className="p-3.5 rounded-2xl border border-slate-800/90 hover:border-violet-500/45 bg-slate-950/75 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                    <span className="px-2 py-0.5 rounded-md bg-violet-500/15 border border-violet-500/30 text-violet-300 font-mono text-[10px] font-bold shrink-0">
+                      #{idx + 1}
+                    </span>
+                    <code className="text-xs font-mono text-slate-200 break-all select-all leading-relaxed">
+                      {ua}
+                    </code>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => copySingle(ua, idx)}
+                      className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer ${
+                        copiedIndex === idx
+                          ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
+                          : 'border-slate-700 bg-slate-900 hover:border-violet-400 text-slate-200'
+                      }`}
+                    >
+                      {copiedIndex === idx ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedIndex === idx ? 'Copied' : 'Copy'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSingleResult(ua, idx)}
+                      className="p-1.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 hover:text-rose-400 cursor-pointer"
+                      title="Remove line"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        ) : (
+          <textarea
+            readOnly
+            rows={14}
+            value={filteredResults.join('\n')}
+            className="w-full p-4 rounded-2xl border bg-slate-950 font-mono text-xs text-violet-200 resize-none leading-relaxed"
+          />
+        )}
+
+        {/* Privacy & Deduplication Footer */}
+        <div className="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+          <span className="flex items-center gap-1.5">
+            <Lock className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Zero-Duplicate Pool Cut Guarantee: every consumed User Agent is permanently retired from shared distribution.</span>
+          </span>
+          <span className="font-mono text-slate-500">
+            {device} · {browser} {inAppBrowser !== 'None' ? `+ ${inAppBrowser}` : ''}
+          </span>
+        </div>
       </div>
+
+      {/* How It Works Modal */}
+      {howItWorksOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md oe-panel rounded-3xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-violet-400" />
+                <span>How User Agent Generator Works</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setHowItWorksOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <ul className="space-y-2.5 text-xs text-slate-300 leading-relaxed">
+              <li>1. Select your exact <strong>Target Device</strong> (strict device matching ensures an iPhone query never returns Android or Windows strings).</li>
+              <li>2. Enable <strong>Browser Version</strong> or <strong>In-App Version</strong> cycling to rotate through up to 5 latest release builds evenly across your batch.</li>
+              <li>3. Pick a target <strong>Country / GEO</strong> to inject localized language tags cleanly.</li>
+              <li>4. Every generated User Agent is cut from the Admin Pool so no other user receives your string.</li>
+            </ul>
+            <button
+              type="button"
+              onClick={() => setHowItWorksOpen(false)}
+              className="btn-premium-vivid w-full py-2.5 rounded-xl text-xs cursor-pointer"
+            >
+              Got It
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

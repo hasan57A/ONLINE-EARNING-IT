@@ -1,24 +1,21 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useRouter } from '../../context/RouterContext';
 import { useToast } from '../../components/ui/Toast';
 import { db, TOOL_CREDIT_COSTS } from '../../services/db';
+import { playUiSound } from '../../services/sound';
 import {
   Users,
   Copy,
   Download,
   Bookmark,
   RefreshCw,
-  Info,
-  ShieldCheck,
-  CheckCircle2,
   Sparkles,
   Sliders,
-  UserCheck,
   Phone,
   Mail,
   User,
   Check,
-  Database,
   Scissors,
   Search,
   Globe2,
@@ -31,13 +28,15 @@ import { PackageCreditGuard } from '../../components/ui/PackageCreditGuard';
 
 export const LeadGeneratorPage: React.FC = () => {
   const { user, refreshUser } = useAuth();
+  const { navigate } = useRouter();
   const { showToast } = useToast();
   useDbSync();
 
-  const [country, setCountry] = useState<string>('All Countries');
+  const prefs = db.getUserPreferences();
+  const [country, setCountry] = useState<string>(() => prefs.defaultCountry || 'All Countries');
   const [countrySearch, setCountrySearch] = useState<string>('');
   const [gender, setGender] = useState<'Male' | 'Female' | 'Mix'>('Mix');
-  const [quantity, setQuantity] = useState<number>(5);
+  const [quantity, setQuantity] = useState<number>(() => Math.min(100, Math.max(1, prefs.defaultQuantity || 5)));
 
   const [leads, setLeads] = useState<Array<{ fullName: string; gender: string; gmail: string; phoneNumber: string }>>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -59,8 +58,7 @@ export const LeadGeneratorPage: React.FC = () => {
     return (
       c.name.toLowerCase().includes(q) ||
       c.code.toLowerCase().includes(q) ||
-      c.locale.toLowerCase().includes(q) ||
-      c.languageName.toLowerCase().includes(q)
+      c.locale.toLowerCase().includes(q)
     );
   });
 
@@ -80,6 +78,7 @@ export const LeadGeneratorPage: React.FC = () => {
     const access = db.canUseTool(user.id, creditsRequired);
     if (!access.allowed) {
       showToast(access.reason || 'Active package and credits are required to generate Leads.', 'error');
+      if (!access.hasUsablePackage) navigate('/payment');
       return;
     }
 
@@ -101,6 +100,17 @@ export const LeadGeneratorPage: React.FC = () => {
       setLeads(results);
       setFromPool(fromPoolCount);
       refreshUser();
+      playUiSound('generate');
+
+      if (db.getUserPreferences().autoCopyAfterGenerate) {
+        const autoText = results
+          .map(
+            (l, i) =>
+              `[Lead #${i + 1}]\nFull Name: ${l.fullName}\nGender: ${l.gender}\nGmail: ${l.gmail}\nPhone Number: ${l.phoneNumber}\nTarget GEO: ${country}`
+          )
+          .join('\n\n-------------------------\n\n');
+        navigator.clipboard.writeText(autoText);
+      }
 
       db.recordUsage(
         user.id,
@@ -124,186 +134,148 @@ export const LeadGeneratorPage: React.FC = () => {
     }
   };
 
-  const formatLeadsText = () => {
-    return leads
+  const formatLeadsText = () =>
+    leads
       .map(
         (l, i) =>
-          `[Lead #${i + 1}]\nFull Name: ${l.fullName}\nGender: ${l.gender}\nGmail: ${l.gmail}\nPhone Number: ${l.phoneNumber}\nTarget GEO: ${country}\nStatus: Fictional Test Profile`
+          `[Lead #${i + 1}]\nFull Name: ${l.fullName}\nGender: ${l.gender}\nGmail: ${l.gmail}\nPhone Number: ${l.phoneNumber}\nTarget GEO: ${country}`
       )
       .join('\n\n-------------------------\n\n');
-  };
 
   const copyAll = () => {
     if (leads.length === 0) return;
     navigator.clipboard.writeText(formatLeadsText());
-    showToast('Copied all test leads to clipboard!', 'success');
+    playUiSound('copy');
+    showToast('Copied all leads to clipboard!', 'success');
   };
 
   const copySingleLead = (lead: { fullName: string; gender: string; gmail: string; phoneNumber: string }, idx: number) => {
     const text = `${lead.fullName}, ${lead.gender}, ${lead.gmail}, ${lead.phoneNumber}, ${country}`;
     navigator.clipboard.writeText(text);
+    playUiSound('copy');
     setCopiedIndex(idx);
     showToast(`Copied ${lead.fullName} to clipboard!`, 'success');
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
+  const outputFormat = db.getUserPreferences().defaultOutputFormat || 'TXT';
+
   const downloadTxt = () => {
     if (leads.length === 0) return;
-    const blob = new Blob([formatLeadsText()], { type: 'text/plain;charset=utf-8' });
+    let body = formatLeadsText();
+    let mime = 'text/plain;charset=utf-8';
+    const ext = outputFormat.toLowerCase();
+    if (outputFormat === 'CSV') {
+      const rows = leads.map(
+        l =>
+          `"${l.fullName.replace(/"/g, '""')}","${l.gender}","${l.gmail}","${l.phoneNumber}","${country}"`
+      );
+      body = 'FullName,Gender,Gmail,PhoneNumber,Country\n' + rows.join('\n');
+      mime = 'text/csv;charset=utf-8';
+    } else if (outputFormat === 'JSON') {
+      body = JSON.stringify(leads.map(l => ({ ...l, country })), null, 2);
+      mime = 'application/json;charset=utf-8';
+    }
+    const blob = new Blob([body], { type: mime });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `test_leads_${country.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}.txt`;
+    link.download = `leads_${country.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}.${ext}`;
     link.click();
     URL.revokeObjectURL(url);
-    showToast('Downloaded test leads TXT file.', 'success');
+    playUiSound('copy');
+    showToast(`Downloaded leads ${outputFormat} file.`, 'success');
   };
 
   const saveResults = () => {
     if (!user || leads.length === 0) return;
-    const title = `Test Leads (${country} · ${gender} · ${leads.length} records)`;
     db.saveResult(
       user.id,
       'lead-generator',
       'Lead Generator',
-      title,
+      `Leads (${country} · ${gender} · ${leads.length} records)`,
       formatLeadsText(),
       leads.length
     );
-    showToast('Leads saved to your personal dashboard!', 'success');
+    playUiSound('generate');
+    showToast('Leads saved to your dashboard vault!', 'success');
   };
 
   const selectedCountryObj = findCountryGeo(country);
 
   return (
-    <div className="space-y-8">
-      {/* Luxury Tool Banner */}
-      <div className="relative overflow-hidden p-6 sm:p-8 rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-slate-950 via-emerald-950/40 to-slate-950 shadow-2xl">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="flex items-start sm:items-center gap-5">
-            <RealisticToolIcon slug="lead-generator" size="lg" />
-            <div className="space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold tracking-wider uppercase">
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Admin Pool Synchronized
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  All Countries & GEO Languages
-                </span>
-              </div>
-              <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-2.5">
-                Lead Generator
-                <Sparkles className="w-5 h-5 text-emerald-400" />
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-                Strictly pulls verified lead records uploaded in the Admin Database Pool and permanently cuts consumed entries so no lead is distributed twice.
-              </p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="oe-panel rounded-3xl p-6 sm:p-7 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+        <div className="flex items-center gap-4">
+          <RealisticToolIcon slug="lead-generator" size="lg" />
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                Admin Pool Synchronized
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-violet-500/15 text-violet-300 border border-violet-400/30 font-mono">
+                5 Credits / Lead
+              </span>
             </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-100 tracking-tight flex items-center gap-2">
+              <span>Lead Generator</span>
+              <Sparkles className="w-5 h-5 text-emerald-400" />
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-400 max-w-2xl">
+              Pull verified lead profiles from the synced Admin pool and permanently retire distributed records.
+            </p>
           </div>
+        </div>
 
-          {/* Live Pool HUD */}
-          <div className="flex flex-wrap items-center gap-2.5 p-2.5 rounded-2xl border border-white/10 bg-slate-900/80 backdrop-blur-md">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800">
-              <Database className="w-4 h-4 text-emerald-400" />
-              <div>
-                <div className="text-[9px] text-slate-400 font-bold uppercase">Total Uploaded</div>
-                <div className="text-xs font-bold text-white font-mono tabular-nums">{poolTotal} Uploaded</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800">
-              <Scissors className="w-4 h-4 text-rose-400" />
-              <div>
-                <div className="text-[9px] text-slate-400 font-bold uppercase">Used / Cut</div>
-                <div className="text-xs font-bold text-rose-400 font-mono tabular-nums">{poolConsumed} Cut</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/70 border border-slate-800">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <div>
-                <div className="text-[9px] text-slate-400 font-bold uppercase">Remaining</div>
-                <div className="text-xs font-bold text-emerald-400 font-mono tabular-nums">{poolAvailable} Available</div>
-              </div>
-            </div>
+        <div className="flex flex-wrap items-center gap-2.5 p-2 rounded-2xl border border-slate-800 bg-slate-950/75">
+          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
+            <div className="text-[9px] text-slate-400 font-bold uppercase">Uploaded</div>
+            <div className="text-xs font-bold text-slate-100 font-mono">{poolTotal}</div>
+          </div>
+          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
+            <div className="text-[9px] text-slate-400 font-bold uppercase">Cut</div>
+            <div className="text-xs font-bold text-rose-400 font-mono">{poolConsumed}</div>
+          </div>
+          <div className="px-3 py-1.5 rounded-xl bg-slate-900 border border-emerald-500/25">
+            <div className="text-[9px] text-slate-400 font-bold uppercase">Available</div>
+            <div className="text-xs font-bold text-emerald-400 font-mono">{poolAvailable}</div>
           </div>
         </div>
       </div>
 
-      {/* Package & Credit Enforcement Banner */}
       <PackageCreditGuard
         userId={user?.id}
         requiredCredits={effectiveCreditsNeeded}
         creditUnitLabel="5 Credits per Lead"
       />
 
-      {/* Pool Status Banner */}
-      {poolAvailable === 0 ? (
-        <div className="p-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 text-xs flex items-start justify-between gap-3 shadow-lg">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0 mt-0.5">
-              <Database className="w-4 h-4" />
-            </div>
-            <div>
-              <h4 className="font-bold text-white text-xs">Admin Leads Pool is Empty (0 Available)</h4>
-              <p className="text-amber-200/80 leading-relaxed mt-0.5">
-                Leads <strong>only generate</strong> after the administrator uploads leads in the Admin Panel. Total uploaded: <strong className="font-mono tabular-nums">{poolTotal}</strong> · Used: <strong className="font-mono tabular-nums">{poolConsumed}</strong>.
-              </p>
-            </div>
-          </div>
-          <span className="font-mono text-[10px] font-bold text-amber-400 bg-amber-950/80 px-2.5 py-1 rounded-lg border border-amber-500/30 whitespace-nowrap">
-            Upload Required
-          </span>
-        </div>
-      ) : (
-        <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 flex items-center justify-between gap-3 text-xs text-emerald-300">
-          <div className="flex items-center gap-2.5">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-            <p className="leading-relaxed">
-              <strong className="font-mono tabular-nums">{poolAvailable}</strong> fresh leads ready in Admin Database Pool ({poolConsumed} already used / cut).
-            </p>
-          </div>
-          <span className="text-[11px] font-mono font-bold text-emerald-300">
-            {selectedCountryObj.flag} {selectedCountryObj.locale}
-          </span>
-        </div>
-      )}
-
-      {/* Main Grid: Controls vs Results */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Controls Column */}
-        <div className="lg:col-span-5 p-6 rounded-3xl border border-white/10 bg-slate-900/80 shadow-xl space-y-6">
-          <div className="flex items-center justify-between border-b border-white/5 pb-4">
-            <div className="flex items-center gap-2">
+      {/* Main Split */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="lg:col-span-5 oe-panel rounded-3xl p-6 space-y-5">
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-3.5">
+            <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
               <Sliders className="w-4 h-4 text-emerald-400" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-white">
-                Configuration Matrix
-              </h2>
-            </div>
-            <span className="text-[11px] font-mono font-bold text-emerald-400">
-              All GEO Targeted
+              <span>Lead Targeting Controls</span>
+            </h2>
+            <span className="text-[11px] font-mono text-emerald-300">
+              {selectedCountryObj.flag} {selectedCountryObj.locale}
             </span>
           </div>
 
-          {/* 1. Country / GEO Target Language Selection */}
           <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wide text-slate-300 flex items-center gap-1.5">
-                <Globe2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>1. Country / GEO Language</span>
-              </label>
-              <span className="text-[11px] font-bold text-emerald-400 font-mono truncate max-w-[160px]">
-                {selectedCountryObj.flag} {selectedCountryObj.locale}
-              </span>
-            </div>
-
+            <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+              <Globe2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Country / GEO</span>
+            </label>
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={countrySearch}
                 onChange={e => setCountrySearch(e.target.value)}
-                placeholder="Search any country or GEO language..."
-                className="w-full pl-8 pr-3 py-2 rounded-xl border border-white/10 bg-slate-950 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
+                placeholder="Search country..."
+                className="w-full pl-9 pr-3 py-2 rounded-xl border text-xs text-slate-100"
               />
             </div>
 
@@ -317,16 +289,14 @@ export const LeadGeneratorPage: React.FC = () => {
                     onClick={() => setCountry(c.name)}
                     className={`p-2 rounded-2xl text-left border transition-all cursor-pointer flex items-center gap-2 ${
                       isSelected
-                        ? 'border-emerald-500 bg-emerald-950/40 text-white font-bold ring-1 ring-emerald-500/50 shadow-md'
-                        : 'border-white/5 bg-slate-950 hover:border-white/20 text-slate-300 hover:text-white'
+                        ? 'border-emerald-500 bg-emerald-500/15 text-slate-100 font-bold'
+                        : 'border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700'
                     }`}
                   >
-                    <span className="text-base leading-none shrink-0">{c.flag}</span>
+                    <span className="text-base shrink-0">{c.flag}</span>
                     <div className="min-w-0">
                       <div className="text-[11px] font-bold truncate">{c.name}</div>
-                      <div className="text-[9px] font-mono text-slate-400 truncate">
-                        {c.dial} · {c.locale}
-                      </div>
+                      <div className="text-[9px] font-mono text-slate-400 truncate">{c.dial}</div>
                     </div>
                   </button>
                 );
@@ -334,48 +304,31 @@ export const LeadGeneratorPage: React.FC = () => {
             </div>
           </div>
 
-          {/* 2. Gender Distribution Tiles */}
-          <div className="space-y-2.5 pt-2 border-t border-white/5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wide text-slate-300">
-                2. Gender Distribution
-              </label>
-              <span className="text-[11px] font-bold text-emerald-400">
-                {gender} Profile
-              </span>
-            </div>
-
+          <div className="space-y-2.5 pt-2 border-t border-slate-800/80">
+            <label className="text-xs font-bold text-slate-300">Gender Filter</label>
             <div className="grid grid-cols-3 gap-2">
-              {(['Male', 'Female', 'Mix'] as const).map(g => {
-                const isSelected = gender === g;
-                return (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => setGender(g)}
-                    className={`py-3 px-3 rounded-2xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-1 border ${
-                      isSelected
-                        ? 'bg-gradient-to-br from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30 ring-1 ring-emerald-400'
-                        : 'bg-slate-950 border-white/5 text-slate-400 hover:text-white hover:border-white/20'
-                    }`}
-                  >
-                    <User className="w-4 h-4" />
-                    <span>{g}</span>
-                  </button>
-                );
-              })}
+              {(['Male', 'Female', 'Mix'] as const).map(g => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setGender(g)}
+                  className={`py-2.5 px-3 rounded-2xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    gender === g
+                      ? 'border-emerald-400 bg-emerald-500/20 text-slate-100'
+                      : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-slate-100'
+                  }`}
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>{g}</span>
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* 3. Quantity Slider (Max 100) */}
-          <div className="space-y-2.5 pt-2 border-t border-white/5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wide text-slate-300">
-                3. Quantity Batch (Max 100)
-              </label>
-              <span className="text-sm font-mono text-emerald-400 font-black px-2.5 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 tabular-nums">
-                {quantity} Leads
-              </span>
+          <div className="space-y-2.5 pt-2 border-t border-slate-800/80">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-slate-300">Quantity (Max 100)</span>
+              <span className="font-mono font-bold text-emerald-300">{quantity} Leads</span>
             </div>
             <input
               type="range"
@@ -385,16 +338,16 @@ export const LeadGeneratorPage: React.FC = () => {
               onChange={e => setQuantity(Number(e.target.value))}
               className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
             />
-            <div className="flex gap-1.5 pt-1">
+            <div className="grid grid-cols-5 gap-1.5">
               {[5, 10, 25, 50, 100].map(val => (
                 <button
                   key={val}
                   type="button"
                   onClick={() => setQuantity(val)}
-                  className={`flex-1 py-1.5 text-[11px] font-mono rounded-lg transition-all cursor-pointer ${
+                  className={`py-1.5 text-[11px] font-mono rounded-lg border cursor-pointer ${
                     quantity === val
-                      ? 'bg-emerald-600 text-white font-bold shadow-md shadow-emerald-600/30'
-                      : 'bg-slate-950 text-slate-400 hover:text-white border border-white/5'
+                      ? 'border-emerald-500 bg-emerald-500/20 text-slate-100 font-bold'
+                      : 'border-slate-800 bg-slate-950/60 text-slate-400'
                   }`}
                 >
                   {val}
@@ -403,159 +356,136 @@ export const LeadGeneratorPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Generate Button */}
           <button
+            type="button"
             onClick={handleGenerate}
-            disabled={isGenerating || poolAvailable === 0 || !creditAccess.allowed}
-            className={`w-full py-4 rounded-2xl font-bold text-sm shadow-xl flex items-center justify-center gap-2.5 transition-all ${
+            disabled={isGenerating}
+            className={`w-full py-3.5 rounded-2xl font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer ${
               poolAvailable === 0 || !creditAccess.allowed
-                ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-                : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/30 cursor-pointer'
+                ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:border-amber-400/50'
+                : 'btn-premium-emerald'
             }`}
           >
             <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
             <span>
               {!creditAccess.allowed
-                ? creditAccess.hasActivePackage && creditAccess.remainingCredits > 0
-                  ? `Need ${effectiveCreditsNeeded} Cr (${creditAccess.remainingCredits} left)`
-                  : 'Package & Credits Required'
+                ? creditAccess.hasUsablePackage
+                  ? `Need ${effectiveCreditsNeeded} Cr`
+                  : 'Unlock Package to Generate'
                 : poolAvailable === 0
-                ? 'Admin Must Upload Leads First'
-                : `Generate & Cut ${effectiveItemsCount} Leads${
-                    creditAccess.isAdmin ? '' : ` (${effectiveCreditsNeeded} Cr)`
-                  }`}
+                ? 'Admin Must Upload Leads'
+                : `Generate ${effectiveItemsCount} Leads`}
             </span>
           </button>
         </div>
 
-        {/* Results Column: Dossier Cards */}
-        <div className="lg:col-span-7 space-y-4">
-          <div className="p-6 sm:p-7 rounded-3xl border border-white/10 bg-slate-900/80 shadow-xl space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-4">
-              <div>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                  Lead Dossier Output
-                </h3>
-                <span className="text-[11px] text-slate-400 font-mono">
-                  {leads.length} Generated Profiles
-                </span>
-              </div>
-              {fromPool > 0 && (
-                <span className="text-[11px] font-mono font-bold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  {fromPool} matched from exclusive pool
-                </span>
-              )}
+        {/* Output */}
+        <div className="lg:col-span-7 oe-panel rounded-3xl p-6 space-y-5">
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-3.5">
+            <div className="flex items-center gap-2.5">
+              <h3 className="text-base font-bold text-slate-100">Lead Dossier Output</h3>
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/35 text-emerald-200 text-xs font-mono font-bold">
+                {leads.length}
+              </span>
             </div>
-
-            {leads.length === 0 ? (
-              <div className="h-[430px] rounded-2xl border border-dashed border-white/10 bg-slate-950/50 flex flex-col items-center justify-center p-8 text-center text-xs text-slate-400 space-y-3">
-                <div className="p-4 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <Users className="w-10 h-10" />
-                </div>
-                <div className="space-y-1">
-                  <p className="font-bold text-sm text-white">No Leads Generated Yet</p>
-                  <p className="max-w-sm text-slate-400 leading-relaxed">
-                    Select your Target Country, Gender distribution, and click Generate to produce high-fidelity test identities.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-[430px] overflow-y-auto pr-1">
-                <AnimatePresence>
-                  {leads.map((lead, idx) => (
-                    <motion.div
-                      key={idx}
-                      initial={{ opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2, delay: idx * 0.04 }}
-                      className="p-4 rounded-2xl border border-white/10 bg-slate-950 space-y-2.5 hover:border-emerald-500/40 transition-colors shadow-inner"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">
-                            {lead.fullName.charAt(0)}
-                          </div>
-                          <div>
-                            <span className="font-bold text-white text-sm">
-                              {lead.fullName}
-                            </span>
-                            <span className="text-[10px] text-slate-400 ml-2 font-mono">
-                              {lead.gender} · {country}
-                            </span>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => copySingleLead(lead, idx)}
-                          className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-emerald-600 text-slate-300 hover:text-white text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer"
-                        >
-                          {copiedIndex === idx ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-300" />
-                              <span className="text-emerald-300">Copied</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3" />
-                              <span>Copy</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono pt-1 border-t border-white/5">
-                        <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-900/60 border border-white/5">
-                          <Mail className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                          <span className="text-slate-200 truncate">{lead.gmail}</span>
-                        </div>
-                        <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-900/60 border border-white/5">
-                          <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          <span className="text-emerald-400 font-bold">{lead.phoneNumber}</span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </div>
+            {fromPool > 0 && (
+              <span className="text-[11px] font-mono text-emerald-300 flex items-center gap-1">
+                <Scissors className="w-3 h-3" /> {fromPool} cut from pool
+              </span>
             )}
+          </div>
 
-            {/* Action Buttons */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-              <button
-                type="button"
-                onClick={copyAll}
-                disabled={leads.length === 0}
-                className="py-3 px-4 rounded-xl border border-white/10 hover:bg-slate-800 text-slate-200 text-xs font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-40 cursor-pointer shadow-sm"
-              >
-                <Copy className="w-3.5 h-3.5 text-blue-400" />
-                <span>Copy All ({leads.length})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={downloadTxt}
-                disabled={leads.length === 0}
-                className="py-3 px-4 rounded-xl border border-white/10 hover:bg-slate-800 text-slate-200 text-xs font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-40 cursor-pointer shadow-sm"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Download TXT</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={saveResults}
-                disabled={leads.length === 0}
-                className="py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all disabled:opacity-40 cursor-pointer"
-              >
-                <Bookmark className="w-3.5 h-3.5 text-amber-300" />
-                <span>Save Results</span>
-              </button>
+          {leads.length === 0 ? (
+            <div className="h-[420px] rounded-2xl border-2 border-dashed border-slate-800 bg-slate-950/40 flex flex-col items-center justify-center p-8 text-center space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-400/30 flex items-center justify-center text-emerald-300">
+                <Users className="w-7 h-7" />
+              </div>
+              <p className="font-bold text-sm text-slate-100">No Leads Generated Yet</p>
+              <p className="max-w-sm text-xs text-slate-400">
+                Select your target country, gender filter, and batch size, then click Generate.
+              </p>
             </div>
+          ) : (
+            <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+              <AnimatePresence>
+                {leads.map((lead, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.18, delay: idx * 0.03 }}
+                    className="p-4 rounded-2xl border border-slate-800 hover:border-emerald-500/45 bg-slate-950/75 space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold text-xs">
+                          {lead.fullName.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-100 text-sm">{lead.fullName}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            {lead.gender} · {country}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => copySingleLead(lead, idx)}
+                        className="px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-900 hover:border-emerald-400 text-slate-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        {copiedIndex === idx ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedIndex === idx ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-mono pt-1 border-t border-slate-800/70">
+                      <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-900/70 border border-slate-800">
+                        <Mail className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                        <span className="text-slate-200 truncate">{lead.gmail}</span>
+                      </div>
+                      <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-900/70 border border-slate-800">
+                        <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span className="text-emerald-300 font-bold">{lead.phoneNumber}</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+            <button
+              type="button"
+              onClick={copyAll}
+              disabled={leads.length === 0}
+              className="btn-premium-emerald py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copy All ({leads.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={downloadTxt}
+              disabled={leads.length === 0}
+              className="btn-premium-cyan py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download .{outputFormat.toLowerCase()}</span>
+            </button>
+            <button
+              type="button"
+              onClick={saveResults}
+              disabled={leads.length === 0}
+              className="btn-premium-primary py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer"
+            >
+              <Bookmark className="w-3.5 h-3.5" />
+              <span>Save Results</span>
+            </button>
           </div>
         </div>
       </div>
     </div>
   );
 };
-

@@ -8,6 +8,11 @@ import { RouterProvider, useRouter } from './context/RouterContext';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './components/ui/Toast';
+import { AmbientBackground } from './components/ui/AmbientBackground';
+import { ScrollProgress } from './components/motion/kit';
+import { IntroSplash, ScrollToTop } from './components/motion/Extras';
+import { SmoothScroll } from './components/motion/SmoothScroll';
+import { ParticleField } from './components/motion/ParticleField';
 
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { AdminLayout } from './components/layout/AdminLayout';
@@ -15,6 +20,7 @@ import { AdminLayout } from './components/layout/AdminLayout';
 import { HomePage } from './pages/HomePage';
 import { SignUpPage } from './pages/auth/SignUpPage';
 import { SignInPage } from './pages/auth/SignInPage';
+import { SupabaseExportPage } from './pages/SupabaseExportPage';
 
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { ToolsListPage } from './pages/tools/ToolsListPage';
@@ -35,6 +41,8 @@ import { SavedResultsPage } from './pages/user/SavedResultsPage';
 import { ProfilePage } from './pages/user/ProfilePage';
 import { PaymentPage } from './pages/user/PaymentPage';
 import { SupportPage } from './pages/user/SupportPage';
+import { SettingsPage } from './pages/user/SettingsPage';
+import { AnnouncementsPage } from './pages/user/AnnouncementsPage';
 
 import { AdminOverviewPage } from './pages/admin/AdminOverviewPage';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
@@ -42,6 +50,8 @@ import { AdminToolsPage } from './pages/admin/AdminToolsPage';
 import { AdminDatabasePage } from './pages/admin/AdminDatabasePage';
 import { AdminPaymentsPage } from './pages/admin/AdminPaymentsPage';
 import { AdminSupportPage } from './pages/admin/AdminSupportPage';
+import { AdminSupportChannelsPage } from './pages/admin/AdminSupportChannelsPage';
+import { AdminAnnouncementsPage } from './pages/admin/AdminAnnouncementsPage';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 
 const AppRoutes: React.FC = () => {
@@ -59,6 +69,9 @@ const AppRoutes: React.FC = () => {
   if (path === '/signin') {
     return <SignInPage />;
   }
+  if (path === '/supabase-export') {
+    return <SupabaseExportPage />;
+  }
 
   // Admin Routes (Rendered inside AdminLayout)
   if (path.startsWith('/admin')) {
@@ -68,6 +81,8 @@ const AppRoutes: React.FC = () => {
     else if (path === '/admin/database') adminContent = <AdminDatabasePage />;
     else if (path === '/admin/payments') adminContent = <AdminPaymentsPage />;
     else if (path === '/admin/support') adminContent = <AdminSupportPage />;
+    else if (path === '/admin/support-channels') adminContent = <AdminSupportChannelsPage />;
+    else if (path === '/admin/announcements') adminContent = <AdminAnnouncementsPage />;
     else if (path === '/admin/settings') adminContent = <AdminSettingsPage />;
 
     return <AdminLayout>{adminContent}</AdminLayout>;
@@ -92,6 +107,8 @@ const AppRoutes: React.FC = () => {
   else if (path === '/profile') dashboardContent = <ProfilePage />;
   else if (path === '/payment') dashboardContent = <PaymentPage />;
   else if (path === '/support') dashboardContent = <SupportPage />;
+  else if (path === '/settings') dashboardContent = <SettingsPage />;
+  else if (path === '/announcements') dashboardContent = <AnnouncementsPage />;
 
   return <DashboardLayout>{dashboardContent}</DashboardLayout>;
 };
@@ -115,12 +132,12 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, Er
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
-          <div className="max-w-md w-full p-6 rounded-2xl border border-rose-500/30 bg-slate-900 space-y-4 text-center">
-            <h1 className="text-lg font-bold text-white">Something went wrong</h1>
+          <div className="oe-panel oe-rgb-rose max-w-md w-full p-6 rounded-2xl space-y-4 text-center">
+            <h1 className="text-lg font-bold text-slate-100">Something went wrong</h1>
             <p className="text-xs text-slate-400 break-words">{this.state.message}</p>
             <button
               onClick={() => window.location.reload()}
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold cursor-pointer"
+              className="btn-premium-primary px-5 py-2.5 rounded-xl text-xs cursor-pointer"
             >
               Reload Application
             </button>
@@ -139,6 +156,12 @@ export default function App() {
         <RouterProvider>
           <AuthProvider>
             <ToastProvider>
+              <ScrollProgress />
+              <ParticleField />
+              <SmoothScroll />
+              <ScrollToTop />
+              <IntroSplash />
+              <AmbientBackground />
               <AppRoutes />
             </ToastProvider>
           </AuthProvider>
