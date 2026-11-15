@@ -4,8 +4,10 @@ export type UserStatus = 'active' | 'deactivated';
 export interface User {
   id: string;
   fullName: string;
+  username?: string;
   mobile: string;
   gmail: string;
+  telegramUsername?: string;
   passwordHash: string;
   salt: string;
   role: Role;
@@ -13,7 +15,14 @@ export interface User {
   plan?: string;
   planStatus?: 'none' | 'pending' | 'active';
   credits?: number;
+  usedCredits?: number;
   planUpdatedAt?: string;
+  emailVerified?: boolean;
+  telegramVerified?: boolean;
+  phoneVerified?: boolean;
+  twoFactorEnabled?: boolean;
+  adminNote?: string;
+  lastLoginAt?: string;
   createdAt: string;
   updatedAt?: string;
 }
@@ -80,7 +89,7 @@ export interface UserAgentEntry {
   id: string;
   device: 'iPhone' | 'iPad' | 'Android' | 'Windows' | 'macOS';
   browser: 'Chrome' | 'Firefox' | 'Safari' | 'Edge' | 'Opera' | 'None';
-  inAppBrowser: 'Facebook' | 'Facebook Lite' | 'Instagram' | 'Twitter' | 'LinkedIn' | 'Snapchat' | 'TikTok' | 'None';
+  inAppBrowser: 'Facebook' | 'Facebook Lite' | 'Instagram' | 'Twitter' | 'LinkedIn' | 'Snapchat' | 'TikTok' | 'WeChat' | 'None';
   country: string;
   userAgentString: string;
   used: boolean;
@@ -162,9 +171,62 @@ export interface SupportTicket {
   userEmail: string;
   subject: string;
   status: 'open' | 'replied' | 'closed';
+  adminNote?: string;
   createdAt: string;
   updatedAt: string;
   messages: SupportChatMessage[];
+}
+
+export interface SupportChannel {
+  id: string;
+  type: 'telegram' | 'whatsapp';
+  name: string;
+  handleOrNumber: string;
+  isPrimary: boolean;
+  status: 'active' | 'inactive';
+  visibleToUsers: boolean;
+  order: number;
+  createdAt: string;
+}
+
+export interface AnnouncementPost {
+  id: string;
+  title: string;
+  message: string;
+  type: 'Update' | 'Announcement' | 'Notice' | 'Greeting';
+  audience: 'All Users' | 'Premium Users' | 'Specific Users';
+  status: 'Published' | 'Scheduled' | 'Draft' | 'Sent';
+  recipientsCount: number;
+  thumbnailVariant?: 'bonus' | 'tool' | 'maintenance' | 'promo';
+  createdAt: string;
+}
+
+export interface UserPreferences {
+  language: string;
+  timeZone: string;
+  dateFormat: string;
+  themeMode: 'dark' | 'light' | 'system';
+  rgbEffects: boolean;
+  animations: boolean;
+  sidebarStyle: 'full' | 'compact';
+  fontStyle: 'Plus Jakarta Sans' | 'Outfit' | 'Manrope';
+  soundEnabled: boolean;
+  buttonClickSound: boolean;
+  generateSound: boolean;
+  copySound: boolean;
+  notificationSound: boolean;
+  soundVolume: number;
+  emailNotifications: boolean;
+  toolUpdatesNotif: boolean;
+  announcementsNotif: boolean;
+  securityAlertsNotif: boolean;
+  marketingEmailsNotif: boolean;
+  defaultQuantity: number;
+  defaultCountry: string;
+  defaultOutputFormat: 'TXT' | 'CSV' | 'JSON';
+  autoCopyAfterGenerate: boolean;
+  showToolTips: boolean;
+  loginAlerts: boolean;
 }
 
 export interface UsageHistoryEntry {

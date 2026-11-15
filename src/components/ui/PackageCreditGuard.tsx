@@ -33,16 +33,16 @@ export const PackageCreditGuard: React.FC<PackageCreditGuardProps> = ({
             <ShieldCheck className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="font-bold text-white text-xs flex items-center gap-1.5">
+            <h4 className="font-bold text-slate-100 text-xs flex items-center gap-1.5">
               <span>Admin Unlimited Access Active</span>
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             </h4>
-            <p className="text-amber-200/80 text-[11px] mt-0.5">
+            <p className="text-amber-300/90 text-[11px] mt-0.5">
               Administrator accounts bypass credit deductions. Regular users require an active paid package and credits.
             </p>
           </div>
         </div>
-        <span className="font-mono text-[11px] font-bold text-amber-300 bg-amber-950/60 px-3 py-1 rounded-lg border border-amber-500/30">
+        <span className="font-mono text-[11px] font-bold text-amber-300 bg-amber-500/15 px-3 py-1 rounded-lg border border-amber-500/30">
           UNLIMITED CREDITS
         </span>
       </div>
@@ -52,18 +52,18 @@ export const PackageCreditGuard: React.FC<PackageCreditGuardProps> = ({
   if (access.hasActivePackage && access.remainingCredits > 0 && access.allowed) {
     const packCredits = access.packageCredits ?? access.remainingCredits;
     return (
-      <div className="p-4 rounded-2xl border border-blue-500/30 bg-blue-500/10 text-xs flex flex-wrap items-center justify-between gap-3 shadow-lg">
+      <div className="oe-panel oe-rgb-violet p-4 rounded-2xl text-xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400 shrink-0">
+          <div className="p-2 rounded-xl bg-violet-500/20 border border-violet-400/30 text-violet-300 shrink-0">
             <Coins className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="font-bold text-white text-xs font-mono tabular-nums">
+            <h4 className="font-bold text-slate-100 text-xs font-mono tabular-nums">
               {access.planName || 'Active Package'} ({packCredits.toLocaleString()} Cr Pack) ·{' '}
               {access.remainingCredits.toLocaleString()} Credits Remaining
             </h4>
-            <p className="text-blue-200/80 text-[11px] mt-0.5">
-              Rate: <strong className="text-white">{creditUnitLabel}</strong> · This run will use{' '}
+            <p className="text-violet-300/90 text-[11px] mt-0.5">
+              Rate: <strong className="text-slate-100">{creditUnitLabel}</strong> · This run will use{' '}
               <strong className="text-cyan-300 font-mono tabular-nums">{requiredCredits}</strong>{' '}
               {requiredCredits === 1 ? 'credit' : 'credits'}.
             </p>
@@ -72,9 +72,9 @@ export const PackageCreditGuard: React.FC<PackageCreditGuardProps> = ({
         <button
           type="button"
           onClick={() => navigate('/payment')}
-          className="px-3 py-1.5 rounded-xl border border-blue-400/40 bg-blue-600/20 hover:bg-blue-600/30 text-blue-200 text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+          className="btn-premium-glass px-3.5 py-2 rounded-xl text-violet-200 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer"
         >
-          <CreditCard className="w-3.5 h-3.5" />
+          <CreditCard className="w-3.5 h-3.5 text-violet-400" />
           <span>Top Up Credits</span>
         </button>
       </div>
@@ -89,11 +89,11 @@ export const PackageCreditGuard: React.FC<PackageCreditGuardProps> = ({
             <AlertTriangle className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="font-bold text-white text-xs">
+            <h4 className="font-bold text-slate-100 text-xs">
               Insufficient Credits for Requested Quantity
             </h4>
-            <p className="text-amber-200/85 text-[11px] leading-relaxed mt-0.5">
-              You have <strong className="font-mono text-white">{access.remainingCredits.toLocaleString()}</strong> credits remaining, but requested{' '}
+            <p className="text-amber-300/90 text-[11px] leading-relaxed mt-0.5">
+              You have <strong className="font-mono text-slate-100">{access.remainingCredits.toLocaleString()}</strong> credits remaining, but requested{' '}
               <strong className="font-mono text-amber-300">{requiredCredits}</strong>. Reduce the quantity to {access.remainingCredits} or less, or buy a new package.
             </p>
           </div>
@@ -116,8 +116,8 @@ export const PackageCreditGuard: React.FC<PackageCreditGuardProps> = ({
     <div
       className={`p-5 rounded-2xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl ${
         isPending
-          ? 'border-amber-500/40 bg-gradient-to-r from-amber-950/60 via-slate-900/90 to-slate-950'
-          : 'border-rose-500/40 bg-gradient-to-r from-rose-950/60 via-slate-900/90 to-slate-950'
+          ? 'border-amber-500/40 bg-amber-500/10 dark:bg-gradient-to-r dark:from-amber-950/60 dark:via-slate-900/90 dark:to-slate-950'
+          : 'border-rose-500/40 bg-rose-500/10 dark:bg-gradient-to-r dark:from-rose-950/60 dark:via-slate-900/90 dark:to-slate-950'
       }`}
     >
       <div className="flex items-start gap-3.5">
@@ -130,7 +130,7 @@ export const PackageCreditGuard: React.FC<PackageCreditGuardProps> = ({
         </div>
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h4 className="font-extrabold text-white text-sm">
+            <h4 className="font-extrabold text-slate-100 text-sm">
               {isPending
                 ? 'Package Payment Pending Admin Approval'
                 : access.hasActivePackage && access.remainingCredits === 0
@@ -156,7 +156,7 @@ export const PackageCreditGuard: React.FC<PackageCreditGuardProps> = ({
       <button
         type="button"
         onClick={() => navigate('/payment')}
-        className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all cursor-pointer shrink-0"
+        className="btn-premium-vivid px-5 py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer shrink-0"
       >
         <CreditCard className="w-4 h-4" />
         <span>{isPending ? 'View Payment Status' : 'Buy Package & Unlock'}</span>

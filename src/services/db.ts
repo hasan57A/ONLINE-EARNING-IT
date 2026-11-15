@@ -18,6 +18,9 @@ import {
   PaymentPackage,
   PaymentGatewaySettings,
   PaymentRequest,
+  SupportChannel,
+  AnnouncementPost,
+  UserPreferences,
 } from '../types';
 import { findCountryGeo } from '../data/countries';
 
@@ -119,6 +122,131 @@ const STORAGE_KEYS = {
   ADMIN_INITIALIZED: 'oe_admin_initialized_v2',
   PAYMENT_REQUESTS: 'oe_payment_requests_v2',
   PAYMENT_SETTINGS: 'oe_payment_settings_v2',
+  SUPPORT_CHANNELS: 'oe_support_channels_v2',
+  ANNOUNCEMENTS: 'oe_announcements_v2',
+  USER_PREFERENCES: 'oe_user_preferences_v2',
+};
+
+const DEFAULT_SUPPORT_CHANNELS: SupportChannel[] = [
+  {
+    id: 'ch_tg_1',
+    type: 'telegram',
+    name: 'Official Support',
+    handleOrNumber: '@OnlineEarningIT_Official',
+    isPrimary: true,
+    status: 'active',
+    visibleToUsers: true,
+    order: 1,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'ch_tg_2',
+    type: 'telegram',
+    name: 'Marketing Support',
+    handleOrNumber: '@OEIT_MarketingDesk',
+    isPrimary: false,
+    status: 'active',
+    visibleToUsers: true,
+    order: 2,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'ch_wa_1',
+    type: 'whatsapp',
+    name: 'Support WhatsApp 1',
+    handleOrNumber: '+880 1712-345678',
+    isPrimary: true,
+    status: 'active',
+    visibleToUsers: true,
+    order: 1,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'ch_wa_2',
+    type: 'whatsapp',
+    name: 'Support WhatsApp 2',
+    handleOrNumber: '+880 1812-345679',
+    isPrimary: false,
+    status: 'active',
+    visibleToUsers: true,
+    order: 2,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'ch_wa_3',
+    type: 'whatsapp',
+    name: 'Sales WhatsApp',
+    handleOrNumber: '+880 1912-345680',
+    isPrimary: false,
+    status: 'active',
+    visibleToUsers: true,
+    order: 3,
+    createdAt: new Date().toISOString(),
+  },
+];
+
+const DEFAULT_ANNOUNCEMENTS: AnnouncementPost[] = [
+  {
+    id: 'ann_1',
+    title: 'New Feature: Multi-Device UA Forge & Batch Exports',
+    message: 'Generate realistic User Agents across iPhone, iPad, Android, Windows, and macOS with instant TXT/CSV export and in-app webview versioning.',
+    type: 'Update',
+    audience: 'All Users',
+    status: 'Published',
+    recipientsCount: 0,
+    thumbnailVariant: 'tool',
+    createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
+  },
+  {
+    id: 'ann_2',
+    title: 'Special Offer: 20% Bonus Credits on Pro & Agency Plans',
+    message: 'Upgrade or top up your credit package this week to unlock priority pool allocation and bonus campaign credits.',
+    type: 'Announcement',
+    audience: 'All Users',
+    status: 'Published',
+    recipientsCount: 0,
+    thumbnailVariant: 'bonus',
+    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+  },
+  {
+    id: 'ann_3',
+    title: 'Global Phone Number & GEO Lead Pool Refreshed',
+    message: 'Fresh US, UK, CA, DE, BD, and AU phone numbers and formatted lead datasets have been added to the synchronized pools.',
+    type: 'Notice',
+    audience: 'Premium Users',
+    status: 'Published',
+    recipientsCount: 0,
+    thumbnailVariant: 'maintenance',
+    createdAt: new Date(Date.now() - 86400000 * 6).toISOString(),
+  },
+];
+
+const DEFAULT_USER_PREFERENCES: UserPreferences = {
+  language: 'English',
+  timeZone: '(UTC+06:00) Dhaka, Bangladesh',
+  dateFormat: 'DD MMM YYYY',
+  themeMode: 'dark',
+  rgbEffects: true,
+  animations: true,
+  sidebarStyle: 'full',
+  fontStyle: 'Plus Jakarta Sans',
+  soundEnabled: true,
+  buttonClickSound: true,
+  generateSound: true,
+  copySound: true,
+  notificationSound: true,
+  soundVolume: 30,
+  emailNotifications: true,
+  toolUpdatesNotif: true,
+  announcementsNotif: true,
+  securityAlertsNotif: true,
+  marketingEmailsNotif: false,
+  defaultQuantity: 20,
+  defaultCountry: 'All Countries',
+  defaultOutputFormat: 'TXT',
+  autoCopyAfterGenerate: false,
+  showToolTips: true,
+  loginAlerts: true,
 };
 
 const DEFAULT_PAYMENT_GATEWAYS: PaymentGatewaySettings = {
@@ -215,13 +343,16 @@ interface TableCfg {
   pool?: boolean; // generator pools that users "claim" items from
   noInsert?: boolean;
   noDelete?: boolean;
+  alias?: Record<string, string>; // column -> object key (when not simple snake->camel)
+  noteKind?: 'user' | 'ticket'; // admin-only notes live in the admin_notes table
   sort?: (a: any, b: any) => number;
 }
 
 const TABLES: Record<string, TableCfg> = {
   [STORAGE_KEYS.USERS]: {
-    table: 'profiles', kind: 'list', noInsert: true, noDelete: true,
-    cols: ['id', 'full_name', 'mobile', 'gmail', 'role', 'status', 'plan', 'plan_status', 'credits', 'plan_updated_at', 'created_at', 'updated_at'],
+    table: 'profiles', kind: 'list', noInsert: true,
+    cols: ['id', 'full_name', 'username', 'mobile', 'gmail', 'telegram_username', 'role', 'status', 'plan', 'plan_status', 'credits', 'used_credits', 'plan_updated_at', 'email_verified', 'telegram_verified', 'phone_verified', 'two_factor_enabled', 'last_login_at', 'created_at', 'updated_at'],
+    noteKind: 'user',
     order: { col: 'created_at', asc: true },
   },
   [STORAGE_KEYS.TOOLS]: {
@@ -257,6 +388,16 @@ const TABLES: Record<string, TableCfg> = {
     table: 'payment_settings', kind: 'single', cols: [],
     order: { col: 'id', asc: true },
   },
+  [STORAGE_KEYS.SUPPORT_CHANNELS]: {
+    table: 'support_channels', kind: 'list', alias: { sort_order: 'order' },
+    cols: ['id', 'type', 'name', 'handle_or_number', 'is_primary', 'status', 'visible_to_users', 'sort_order', 'created_at'],
+    order: { col: 'sort_order', asc: true },
+  },
+  [STORAGE_KEYS.ANNOUNCEMENTS]: {
+    table: 'announcements', kind: 'list',
+    cols: ['id', 'title', 'message', 'type', 'audience', 'status', 'recipients_count', 'thumbnail_variant', 'created_at'],
+    order: { col: 'created_at', asc: false },
+  },
   [STORAGE_KEYS.UA_POOL]: {
     table: 'user_agents', kind: 'list', pool: true,
     cols: ['id', 'device', 'browser', 'in_app_browser', 'country', 'user_agent_string', 'used', 'used_by', 'used_at', 'created_at'],
@@ -288,7 +429,7 @@ const TABLES: Record<string, TableCfg> = {
     order: { col: 'id', asc: false },
   },
   [STORAGE_KEYS.SUPPORT_TICKETS]: {
-    table: 'support_tickets', kind: 'list',
+    table: 'support_tickets', kind: 'list', noteKind: 'ticket',
     cols: ['id', 'user_id', 'user_name', 'user_email', 'subject', 'status', 'messages', 'created_at', 'updated_at'],
     order: { col: 'created_at', asc: false },
   },
@@ -317,6 +458,12 @@ class DatabaseService {
       this.hydrate().catch(e => console.error('Initial data load failed:', e)),
       new Promise<void>(res => setTimeout(res, 15000)),
     ]);
+
+    try {
+      this.applyUserPreferencesToDom(this.getUserPreferences());
+    } catch {
+      /* ignore */
+    }
 
     supabase.auth.onAuthStateChange((event: string) => {
       if (event === 'SIGNED_OUT' && this.getCurrentUser()) {
@@ -352,6 +499,11 @@ class DatabaseService {
 
   private getItem<T>(key: string, fallback: T): T {
     try {
+      if (key === STORAGE_KEYS.USER_PREFERENCES) {
+        // display preferences stay on this device
+        const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+        return raw ? JSON.parse(raw) : fallback;
+      }
       const data = this.store[key];
       return data !== undefined ? JSON.parse(data) : fallback;
     } catch {
@@ -361,6 +513,11 @@ class DatabaseService {
 
   private setItem<T>(key: string, value: T): void {
     try {
+      if (key === STORAGE_KEYS.USER_PREFERENCES) {
+        localStorage.setItem(key, JSON.stringify(value));
+        this.notify();
+        return;
+      }
       this.store[key] = JSON.stringify(value);
       const cfg = TABLES[key];
       if (cfg) this.scheduleSync(key, cfg, value);
@@ -387,16 +544,12 @@ class DatabaseService {
   private async doHydrate(): Promise<void> {
     const { data: sessionData } = await supabase.auth.getSession();
     const session = sessionData.session;
-    let changed = false;
+    const before: Record<string, string | undefined> = { ...this.store };
 
     for (const [key, cfg] of Object.entries(TABLES)) {
       if (!session && !cfg.public) {
-        const empty = cfg.kind === 'list' ? '[]' : undefined;
-        if (this.store[key] !== empty) {
-          if (empty === undefined) delete this.store[key];
-          else this.store[key] = empty;
-          changed = true;
-        }
+        if (cfg.kind === 'list') this.store[key] = '[]';
+        else delete this.store[key];
         this.synced[key] = new Map();
         continue;
       }
@@ -404,23 +557,15 @@ class DatabaseService {
       if (result === null) continue; // keep what we had on error
       if (cfg.kind === 'list') {
         const rows = result as any[];
-        const json = JSON.stringify(rows);
         const map = new Map<string, string>();
         rows.forEach(r => map.set(String(r.id), JSON.stringify(r)));
         this.synced[key] = map;
-        if (this.store[key] !== json) {
-          this.store[key] = json;
-          changed = true;
-        }
+        this.store[key] = JSON.stringify(rows);
       } else {
-        const obj = result as any;
-        if (obj === undefined) continue;
-        const json = JSON.stringify(obj);
+        if (result === undefined) continue;
+        const json = JSON.stringify(result);
         this.syncedSingle[key] = json;
-        if (this.store[key] !== json) {
-          this.store[key] = json;
-          changed = true;
-        }
+        this.store[key] = json;
       }
     }
 
@@ -434,13 +579,46 @@ class DatabaseService {
         current = null;
       }
     }
-    const currentJson = JSON.stringify(current);
-    if (this.store[STORAGE_KEYS.CURRENT_USER] !== currentJson) {
-      this.store[STORAGE_KEYS.CURRENT_USER] = currentJson;
-      changed = true;
+    this.store[STORAGE_KEYS.CURRENT_USER] = JSON.stringify(current);
+
+    // Private admin notes (only admins can read them)
+    if (current && current.role === 'admin') {
+      try {
+        const { data: noteRows, error } = await supabase.from('admin_notes').select('key,note').limit(5000);
+        if (error) throw error;
+        const notes: Record<string, string> = {};
+        (noteRows || []).forEach((r: { key: string; note: string }) => {
+          notes[r.key] = r.note;
+        });
+        this.applyNotes(STORAGE_KEYS.USERS, 'user', notes);
+        this.applyNotes(STORAGE_KEYS.SUPPORT_TICKETS, 'ticket', notes);
+      } catch (e) {
+        console.error('Could not load admin notes:', e);
+      }
     }
 
+    let changed = false;
+    for (const k of new Set([...Object.keys(before), ...Object.keys(this.store)])) {
+      if (before[k] !== this.store[k]) changed = true;
+    }
     if (changed) this.notify();
+  }
+
+  private applyNotes(storeKey: string, kind: 'user' | 'ticket', notes: Record<string, string>) {
+    const raw = this.store[storeKey];
+    if (!raw) return;
+    const list: any[] = JSON.parse(raw);
+    const map = this.synced[storeKey] || (this.synced[storeKey] = new Map());
+    let touched = false;
+    for (const item of list) {
+      const n = notes[kind + ':' + item.id];
+      if (n !== undefined) {
+        item.adminNote = n;
+        map.set(String(item.id), JSON.stringify(item));
+        touched = true;
+      }
+    }
+    if (touched) this.store[storeKey] = JSON.stringify(list);
   }
 
   private async fetchTable(cfg: TableCfg): Promise<any[] | any | null> {
@@ -478,7 +656,7 @@ class DatabaseService {
     const out: any = {};
     for (const [k, v] of Object.entries(row)) {
       if (v === null || v === undefined) continue;
-      out[toCamel(k)] = v;
+      out[cfg.alias?.[k] ?? toCamel(k)] = v;
     }
     if (cfg.table === 'profiles') {
       out.passwordHash = '';
@@ -490,7 +668,7 @@ class DatabaseService {
   private rowOutInsert(item: any, cfg: TableCfg): any {
     const out: any = {};
     for (const col of cfg.cols) {
-      const v = item[toCamel(col)];
+      const v = item[cfg.alias?.[col] ?? toCamel(col)];
       if (v !== undefined && v !== null) out[col] = v;
     }
     return out;
@@ -500,7 +678,7 @@ class DatabaseService {
     const out: any = {};
     for (const col of cfg.cols) {
       if (col === 'id') continue;
-      const key = toCamel(col);
+      const key = cfg.alias?.[col] ?? toCamel(col);
       const a = JSON.stringify(prev[key]);
       const b = JSON.stringify(item[key]);
       if (a !== b) out[col] = item[key] === undefined ? null : item[key];
@@ -545,6 +723,8 @@ class DatabaseService {
     const seen = new Set<string>();
     const inserts: any[] = [];
     const updates: { id: string; payload: any }[] = [];
+    const noteOps: { key: string; note: string | null }[] = [];
+    const isAdminNow = this.getCurrentUser()?.role === 'admin';
 
     for (const item of list) {
       const id = String(item.id);
@@ -554,8 +734,13 @@ class DatabaseService {
       if (prev === undefined) {
         inserts.push(item);
         synced.set(id, json);
+        if (cfg.noteKind && isAdminNow && item.adminNote) noteOps.push({ key: cfg.noteKind + ':' + id, note: item.adminNote });
       } else if (prev !== json) {
-        const payload = this.rowOutUpdate(JSON.parse(prev), item, cfg);
+        const prevObj = JSON.parse(prev);
+        if (cfg.noteKind && isAdminNow && (prevObj.adminNote ?? '') !== (item.adminNote ?? '')) {
+          noteOps.push({ key: cfg.noteKind + ':' + id, note: item.adminNote ? item.adminNote : null });
+        }
+        const payload = this.rowOutUpdate(prevObj, item, cfg);
         synced.set(id, json);
         if (Object.keys(payload).length > 0) updates.push({ id, payload });
       }
@@ -565,9 +750,10 @@ class DatabaseService {
       if (!seen.has(id)) {
         deletes.push(id);
         synced.delete(id);
+        if (cfg.noteKind && isAdminNow) noteOps.push({ key: cfg.noteKind + ':' + id, note: null });
       }
     }
-    if (!inserts.length && !updates.length && !deletes.length) return;
+    if (!inserts.length && !updates.length && !deletes.length && !noteOps.length) return;
 
     this.enqueue(async () => {
       // 1) inserts
@@ -628,6 +814,19 @@ class DatabaseService {
           if (!data || data.length < chunk.length) {
             throw new Error('Permission denied: some records could not be deleted (' + cfg.table + ')');
           }
+        }
+      }
+
+      // 4) private admin notes
+      for (const op of noteOps) {
+        if (op.note === null) {
+          const { error } = await supabase.from('admin_notes').delete().eq('key', op.key);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('admin_notes')
+            .upsert({ key: op.key, note: op.note, updated_at: new Date().toISOString() });
+          if (error) throw error;
         }
       }
 
@@ -747,7 +946,17 @@ class DatabaseService {
     }
   }
 
-  public async updateUserProfile(userId: string, data: { fullName?: string; mobile?: string; newPassword?: string }): Promise<{ success: boolean; error?: string }> {
+  public async updateUserProfile(
+    userId: string,
+    data: {
+      fullName?: string;
+      username?: string;
+      mobile?: string;
+      telegramUsername?: string;
+      twoFactorEnabled?: boolean;
+      newPassword?: string;
+    }
+  ): Promise<{ success: boolean; error?: string }> {
     if (data.newPassword) {
       if (data.newPassword.length < 8) {
         return { success: false, error: 'Password must be at least 8 characters' };
@@ -761,8 +970,18 @@ class DatabaseService {
     if (idx === -1) {
       return data.newPassword ? { success: true } : { success: false, error: 'User not found' };
     }
-    if (data.fullName) users[idx].fullName = data.fullName.trim();
-    if (data.mobile) users[idx].mobile = data.mobile.trim();
+
+    if (data.fullName !== undefined) users[idx].fullName = data.fullName.trim();
+    if (data.username !== undefined) users[idx].username = data.username.trim().replace(/^@/, '');
+    if (data.mobile !== undefined) users[idx].mobile = data.mobile.trim();
+    if (data.telegramUsername !== undefined) {
+      const cleanTg = data.telegramUsername.trim();
+      users[idx].telegramUsername = cleanTg ? (cleanTg.startsWith('@') ? cleanTg : `@${cleanTg}`) : '';
+      users[idx].telegramVerified = Boolean(cleanTg);
+    }
+    if (data.twoFactorEnabled !== undefined) {
+      users[idx].twoFactorEnabled = data.twoFactorEnabled;
+    }
     users[idx].updatedAt = new Date().toISOString();
     this.setItem(STORAGE_KEYS.USERS, users);
 
@@ -770,6 +989,45 @@ class DatabaseService {
     if (current && current.id === userId) {
       this.setCurrentUser(users[idx]);
     }
+    return { success: true };
+  }
+
+  public adminUpdateUserDetails(
+    userId: string,
+    patch: {
+      fullName?: string;
+      role?: 'user' | 'admin';
+      status?: 'active' | 'deactivated';
+      adminNote?: string;
+    }
+  ): { success: boolean; error?: string } {
+    const users = this.getUsers();
+    const idx = users.findIndex(u => u.id === userId);
+    if (idx === -1) return { success: false, error: 'User not found.' };
+    if (patch.fullName !== undefined) users[idx].fullName = patch.fullName.trim();
+    if (patch.role !== undefined) users[idx].role = patch.role;
+    if (patch.status !== undefined) users[idx].status = patch.status;
+    if (patch.adminNote !== undefined) users[idx].adminNote = patch.adminNote;
+    users[idx].updatedAt = new Date().toISOString();
+    this.setItem(STORAGE_KEYS.USERS, users);
+    const current = this.getCurrentUser();
+    if (current && current.id === userId) {
+      this.setCurrentUser(users[idx]);
+    }
+    return { success: true };
+  }
+
+  public adminDeleteUser(userId: string): { success: boolean; error?: string } {
+    const target = this.getUserById(userId);
+    if (!target) return { success: false, error: 'User not found.' };
+    if (target.role === 'admin') {
+      return { success: false, error: 'Admin accounts cannot be deleted. Change the role to User first.' };
+    }
+    if (this.getCurrentUser()?.id === userId) {
+      return { success: false, error: 'You cannot delete your own account.' };
+    }
+    const next = this.getUsers().filter(u => u.id !== userId);
+    this.setItem(STORAGE_KEYS.USERS, next);
     return { success: true };
   }
 
@@ -782,39 +1040,7 @@ class DatabaseService {
     isAdmin: boolean;
     hasActivePackage: boolean;
     hasUsablePackage: boolean;
-    remainingCredits: number;
     packageCredits?: number;
-    planName?: string;
-    planStatus: 'none' | 'pending' | 'active';
-    reason?: string;
-  } {
-    const base = this.evaluateToolAccess(userId, requiredCredits);
-    const hasUsablePackage = base.isAdmin || (base.planStatus === 'active' && base.remainingCredits > 0);
-
-    let packageCredits: number | undefined;
-    if (!base.isAdmin) {
-      const user = (userId ? this.getUserById(userId) : null) || this.getCurrentUser();
-      const matched = DEFAULT_PAYMENT_PACKAGES.find(p => p.name === base.planName);
-      if (base.planStatus === 'pending' && user) {
-        const pendingReq = this.getPaymentRequests().find(r => r.userId === user.id && r.status === 'pending');
-        const pendingPkg = pendingReq
-          ? DEFAULT_PAYMENT_PACKAGES.find(p => p.id === pendingReq.packageId || p.name === pendingReq.packageName)
-          : undefined;
-        packageCredits = pendingReq?.packageCredits ?? pendingPkg?.credits ?? matched?.credits;
-      } else if (base.planStatus === 'active') {
-        packageCredits = Math.max(matched?.credits ?? 0, base.remainingCredits) || undefined;
-      }
-    }
-    return { ...base, hasUsablePackage, packageCredits };
-  }
-
-  private evaluateToolAccess(
-    userId?: string,
-    requiredCredits: number = 1
-  ): {
-    allowed: boolean;
-    isAdmin: boolean;
-    hasActivePackage: boolean;
     remainingCredits: number;
     planName?: string;
     planStatus: 'none' | 'pending' | 'active';
@@ -826,6 +1052,7 @@ class DatabaseService {
         allowed: false,
         isAdmin: false,
         hasActivePackage: false,
+        hasUsablePackage: false,
         remainingCredits: 0,
         planStatus: 'none',
         reason: 'Please sign in to access marketing tools.',
@@ -837,6 +1064,7 @@ class DatabaseService {
         allowed: true,
         isAdmin: true,
         hasActivePackage: true,
+        hasUsablePackage: true,
         remainingCredits: 999999,
         planName: 'Admin Unlimited',
         planStatus: 'active',
@@ -845,12 +1073,18 @@ class DatabaseService {
 
     const planStatus: 'none' | 'pending' | 'active' = user.planStatus || 'none';
     const remainingCredits = Math.max(0, Math.floor(Number(user.credits ?? 0)));
+    const matchedPkg = DEFAULT_PAYMENT_PACKAGES.find(
+      p => p.name === user.plan || p.id === user.plan
+    );
+    const packageCredits = matchedPkg?.credits;
 
     if (planStatus !== 'active') {
       return {
         allowed: false,
         isAdmin: false,
         hasActivePackage: false,
+        hasUsablePackage: false,
+        packageCredits,
         remainingCredits,
         planName: user.plan,
         planStatus,
@@ -866,6 +1100,8 @@ class DatabaseService {
         allowed: false,
         isAdmin: false,
         hasActivePackage: true,
+        hasUsablePackage: false,
+        packageCredits,
         remainingCredits: 0,
         planName: user.plan,
         planStatus,
@@ -878,6 +1114,8 @@ class DatabaseService {
         allowed: false,
         isAdmin: false,
         hasActivePackage: true,
+        hasUsablePackage: true,
+        packageCredits,
         remainingCredits,
         planName: user.plan,
         planStatus,
@@ -889,6 +1127,8 @@ class DatabaseService {
       allowed: true,
       isAdmin: false,
       hasActivePackage: true,
+      hasUsablePackage: true,
+      packageCredits,
       remainingCredits,
       planName: user.plan,
       planStatus,
@@ -925,15 +1165,17 @@ class DatabaseService {
     }
 
     const nextCredits = currentCredits - cleanAmount;
+    const nextUsedCredits = Math.max(0, Math.floor(Number(targetUser.usedCredits ?? 0))) + cleanAmount;
     const nowIso = new Date().toISOString();
 
     if (idx !== -1) {
       users[idx].credits = nextCredits;
+      users[idx].usedCredits = nextUsedCredits;
       users[idx].updatedAt = nowIso;
       this.setItem(STORAGE_KEYS.USERS, users);
     }
     if (current && current.id === userId) {
-      this.setCurrentUser({ ...current, credits: nextCredits, updatedAt: nowIso });
+      this.setCurrentUser({ ...current, credits: nextCredits, usedCredits: nextUsedCredits, updatedAt: nowIso });
     }
 
     return { success: true, remainingCredits: nextCredits };
@@ -1272,6 +1514,12 @@ class DatabaseService {
               updated = updated.replace(/Snapchat\/[0-9]+(\.[0-9]+)*/g, `Snapchat/${iv}`);
             } else {
               updated += ` Snapchat/${iv}`;
+            }
+          } else if (iab === 'WeChat') {
+            if (/MicroMessenger\/[0-9]+(\.[0-9]+)*/.test(updated)) {
+              updated = updated.replace(/MicroMessenger\/[0-9]+(\.[0-9]+)*/g, `MicroMessenger/${iv}`);
+            } else {
+              updated += ` MicroMessenger/${iv}`;
             }
           }
         }
@@ -1657,7 +1905,8 @@ class DatabaseService {
   public consumeMails(
     userId: string,
     country: string,
-    quantity: number
+    quantity: number,
+    domain?: string
   ): { results: string[]; fromPoolCount: number; generatedCount: number; error?: string } {
     const targetQty = Math.max(1, Math.min(100, quantity || 1));
     const minAccess = this.canUseTool(userId, TOOL_CREDIT_COSTS.MAIL);
@@ -1681,7 +1930,25 @@ class DatabaseService {
       };
     }
 
-    const effectiveQty = Math.min(targetQty, availablePool.length);
+    const normalizedDomain =
+      domain && domain !== 'all' ? domain.trim().toLowerCase().replace(/^@/, '') : '';
+    const matchesDomain = (email: string) =>
+      !normalizedDomain || email.toLowerCase().endsWith(`@${normalizedDomain}`);
+
+    const domainAvailablePool = normalizedDomain
+      ? availablePool.filter(m => matchesDomain(m.email))
+      : availablePool;
+
+    if (domainAvailablePool.length === 0) {
+      return {
+        results: [],
+        fromPoolCount: 0,
+        generatedCount: 0,
+        error: `No @${normalizedDomain} emails available in the Database Pool. Upload @${normalizedDomain} emails in Admin Panel or switch to All Domains.`,
+      };
+    }
+
+    const effectiveQty = Math.min(targetQty, domainAvailablePool.length);
     const batchAccess = this.canUseTool(userId, effectiveQty * TOOL_CREDIT_COSTS.MAIL);
     if (!batchAccess.allowed) {
       return {
@@ -1698,7 +1965,12 @@ class DatabaseService {
     const isGlobalCountry = !country || country === 'Any' || country === 'All Countries';
 
     for (const item of pool) {
-      if (matching.length < effectiveQty && !item.used && (isGlobalCountry || item.country === country)) {
+      if (
+        matching.length < effectiveQty &&
+        !item.used &&
+        matchesDomain(item.email) &&
+        (isGlobalCountry || item.country === country)
+      ) {
         item.used = true;
         item.usedBy = userId;
         item.usedAt = new Date().toISOString();
@@ -1708,11 +1980,11 @@ class DatabaseService {
       remaining.push(item);
     }
 
-    // If exact country match didn't yield enough, pick from any remaining unused emails in the pool
+    // If exact country match didn't yield enough, pick from any remaining unused emails matching the selected domain
     if (matching.length < effectiveQty) {
       for (let i = 0; i < remaining.length; i++) {
         const item = remaining[i];
-        if (!item.used && matching.length < effectiveQty) {
+        if (!item.used && matchesDomain(item.email) && matching.length < effectiveQty) {
           item.used = true;
           item.usedBy = userId;
           item.usedAt = new Date().toISOString();
@@ -2074,6 +2346,12 @@ class DatabaseService {
     this.addMultipleNumbers(sampleNumbers);
 
     const sampleMails: Array<Omit<MailEntry, 'id' | 'used' | 'createdAt'>> = [
+      { country: 'United States', email: 'alex.morgan.us@gmail.com' },
+      { country: 'United States', email: 'sarah.jenkins.cpa@gmail.com' },
+      { country: 'United Kingdom', email: 'oliver.clark.uk@gmail.com' },
+      { country: 'Canada', email: 'liam.hudson.ca@gmail.com' },
+      { country: 'Germany', email: 'max.schmidt.de@gmail.com' },
+      { country: 'Bangladesh', email: 'rafiq.islam.bd@gmail.com' },
       { country: 'United States', email: 'verified.marketing@example.com' },
       { country: 'United Kingdom', email: 'digital.traffic@example.co.uk' },
       { country: 'Germany', email: 'campaign.lead@example.de' },
@@ -2465,6 +2743,172 @@ class DatabaseService {
 
 
     return { success: true };
+  }
+
+  // --- Support Ticket Admin Notes ---
+  public updateTicketAdminNote(ticketId: string, adminNote: string): void {
+    const tickets = this.getSupportTickets();
+    const idx = tickets.findIndex(t => t.id === ticketId);
+    if (idx !== -1) {
+      tickets[idx].adminNote = adminNote;
+      tickets[idx].updatedAt = new Date().toISOString();
+      this.setItem(STORAGE_KEYS.SUPPORT_TICKETS, tickets);
+    }
+  }
+
+  // --- Support Channels Management (Telegram & WhatsApp) ---
+  public getSupportChannels(): SupportChannel[] {
+    const list = this.getItem<SupportChannel[]>(STORAGE_KEYS.SUPPORT_CHANNELS, DEFAULT_SUPPORT_CHANNELS);
+    return [...list].sort((a, b) => a.order - b.order);
+  }
+
+  public saveSupportChannel(channel: Omit<SupportChannel, 'createdAt'> & { createdAt?: string }): void {
+    const list = this.getSupportChannels();
+    const idx = list.findIndex(c => c.id === channel.id);
+    const fullItem: SupportChannel = {
+      ...channel,
+      createdAt: channel.createdAt || new Date().toISOString(),
+    };
+    if (fullItem.isPrimary) {
+      list.forEach(c => {
+        if (c.type === fullItem.type && c.id !== fullItem.id) {
+          c.isPrimary = false;
+        }
+      });
+    }
+    if (idx !== -1) {
+      list[idx] = fullItem;
+    } else {
+      list.push(fullItem);
+    }
+    this.setItem(STORAGE_KEYS.SUPPORT_CHANNELS, list);
+  }
+
+  public deleteSupportChannel(id: string): void {
+    const list = this.getSupportChannels().filter(c => c.id !== id);
+    this.setItem(STORAGE_KEYS.SUPPORT_CHANNELS, list);
+  }
+
+  // --- Announcements & Notifications Management ---
+  public getAnnouncements(): AnnouncementPost[] {
+    const list = this.getItem<AnnouncementPost[]>(STORAGE_KEYS.ANNOUNCEMENTS, DEFAULT_ANNOUNCEMENTS);
+    return [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public saveAnnouncement(post: Omit<AnnouncementPost, 'createdAt'> & { createdAt?: string }): void {
+    const list = this.getAnnouncements();
+    const idx = list.findIndex(p => p.id === post.id);
+    const fullItem: AnnouncementPost = {
+      ...post,
+      createdAt: post.createdAt || new Date().toISOString(),
+    };
+    if (idx !== -1) {
+      list[idx] = fullItem;
+    } else {
+      list.unshift(fullItem);
+    }
+    this.setItem(STORAGE_KEYS.ANNOUNCEMENTS, list);
+  }
+
+  public deleteAnnouncement(id: string): void {
+    const list = this.getAnnouncements().filter(p => p.id !== id);
+    this.setItem(STORAGE_KEYS.ANNOUNCEMENTS, list);
+  }
+
+  // --- User Settings & Preferences ---
+  public applyUserPreferencesToDom(prefs: UserPreferences): void {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    root.dataset.font = prefs.fontStyle || 'Plus Jakarta Sans';
+    root.classList.toggle('oe-no-rgb', prefs.rgbEffects === false);
+    root.classList.toggle('oe-reduced-motion', prefs.animations === false);
+
+    const mode = prefs.themeMode || 'dark';
+    const isLight =
+      mode === 'light' ||
+      (mode === 'system' &&
+        typeof window !== 'undefined' &&
+        window.matchMedia('(prefers-color-scheme: light)').matches);
+    root.classList.toggle('dark', !isLight);
+    root.classList.toggle('oe-light', isLight);
+    root.dataset.colorMode = isLight ? 'light' : 'dark';
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('oe-prefs-changed'));
+      window.dispatchEvent(new CustomEvent('oe-theme-changed'));
+    }
+  }
+
+  public getUserPreferences(): UserPreferences {
+    return {
+      ...DEFAULT_USER_PREFERENCES,
+      ...this.getItem<Partial<UserPreferences>>(STORAGE_KEYS.USER_PREFERENCES, DEFAULT_USER_PREFERENCES),
+    };
+  }
+
+  public updateUserPreferences(patch: Partial<UserPreferences>): UserPreferences {
+    const next = { ...this.getUserPreferences(), ...patch };
+    this.setItem(STORAGE_KEYS.USER_PREFERENCES, next);
+    this.applyUserPreferencesToDom(next);
+    return next;
+  }
+
+  public resetUserPreferences(): UserPreferences {
+    this.setItem(STORAGE_KEYS.USER_PREFERENCES, DEFAULT_USER_PREFERENCES);
+    this.applyUserPreferencesToDom(DEFAULT_USER_PREFERENCES);
+    return DEFAULT_USER_PREFERENCES;
+  }
+
+  public rotateUserSession(userId?: string): string {
+    const now = new Date().toISOString();
+    try {
+      localStorage.setItem('oe_session_rotated_at', now);
+      if (userId) {
+        const users = this.getUsers();
+        const idx = users.findIndex(u => u.id === userId);
+        if (idx !== -1) {
+          users[idx].lastLoginAt = now;
+          users[idx].updatedAt = now;
+          this.setItem(STORAGE_KEYS.USERS, users);
+          const current = this.getCurrentUser();
+          if (current && current.id === userId) {
+            this.setCurrentUser(users[idx]);
+          }
+        }
+      }
+    } catch {
+      // Ignore storage quota errors
+    }
+    return now;
+  }
+
+  public submitContactInquiry(data: {
+    name: string;
+    email: string;
+    message: string;
+    user?: User | null;
+  }): { ticketId?: string; saved: boolean } {
+    if (data.user) {
+      const ticket = this.createSupportTicket(
+        data.user,
+        `Website Inquiry (${data.name.trim()})`,
+        data.message.trim()
+      );
+      return { ticketId: ticket.id, saved: true };
+    }
+    const id = 'inq_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    void supabase
+      .from('contact_inquiries')
+      .insert({
+        id,
+        name: data.name.trim().slice(0, 200),
+        email: data.email.trim().slice(0, 200),
+        message: data.message.trim().slice(0, 5000),
+      })
+      .then(({ error }: { error: unknown }) => {
+        if (error) console.error('Contact inquiry could not be saved:', error);
+      });
+    return { saved: true };
   }
 }
 

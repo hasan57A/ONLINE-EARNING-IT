@@ -10,7 +10,14 @@ interface AuthContextType {
   signIn: (gmail: string, pass: string) => Promise<{ success: boolean; user?: User; error?: string }>;
   signUp: (fullName: string, mobile: string, gmail: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => void;
-  updateProfile: (data: { fullName?: string; mobile?: string; newPassword?: string }) => Promise<{ success: boolean; error?: string }>;
+  updateProfile: (data: {
+    fullName?: string;
+    username?: string;
+    mobile?: string;
+    telegramUsername?: string;
+    twoFactorEnabled?: boolean;
+    newPassword?: string;
+  }) => Promise<{ success: boolean; error?: string }>;
   refreshUser: () => void;
 }
 
@@ -25,11 +32,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   useEffect(() => {
-    const unsub = db.subscribe(() => {
+    const unsubDb = db.subscribe(() => {
       refreshUser();
     });
+
+
     return () => {
-      unsub();
+      unsubDb();
     };
   }, [refreshUser]);
 
@@ -54,7 +63,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await db.registerUser(fullName, mobile, gmail, pass);
       if (res.success && res.user) {
-        // Automatically sign in the registered user
         db.setCurrentUser(res.user);
         setUser(res.user);
         return { success: true };
@@ -72,7 +80,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
-  const updateProfile = async (data: { fullName?: string; mobile?: string; newPassword?: string }) => {
+  const updateProfile = async (data: {
+    fullName?: string;
+    username?: string;
+    mobile?: string;
+    telegramUsername?: string;
+    twoFactorEnabled?: boolean;
+    newPassword?: string;
+  }) => {
     if (!user) return { success: false, error: 'Not authenticated' };
     const res = await db.updateUserProfile(user.id, data);
     if (res.success) {
