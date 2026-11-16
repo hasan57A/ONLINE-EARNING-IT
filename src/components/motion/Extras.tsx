@@ -324,7 +324,7 @@ export const ToolCarousel3D: React.FC<{ tools: CarouselTool[]; onOpen: (slug: st
         const depth = (Math.cos(a) + 1) / 2; // 0 back .. 1 front
         const scale = 0.52 + depth * 0.62;
         el.style.transform = `translate3d(${x.toFixed(1)}px, ${(-depth * 18).toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
-        el.style.opacity = String(0.28 + depth * 0.72);
+        el.style.opacity = String(0.62 + depth * 0.38);
         el.style.zIndex = String(Math.round(depth * 100));
       });
       raf = requestAnimationFrame(frame);

@@ -9,7 +9,7 @@ import { Lock, Mail, ArrowLeft, ArrowRight, Eye, EyeOff, ShieldCheck } from 'luc
 
 export const SignInPage: React.FC = () => {
   const { navigate, queryParams } = useRouter();
-  const { signIn, signInWithGoogle, loading } = useAuth();
+  const { signIn, loading } = useAuth();
   const { showToast } = useToast();
 
   const redirectTarget = queryParams.get('redirect') || '/dashboard';
@@ -18,27 +18,6 @@ export const SignInPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState('');
-
-  const handleGoogleSignIn = async () => {
-    setFormError('');
-    playUiSound('click');
-    const res = await signInWithGoogle();
-    if (res.success) {
-      playUiSound('notification');
-      showToast('Redirecting to Google for Supabase Cloud sync...', 'success');
-      if (res.user) {
-        if (res.user.role === 'admin') {
-          navigate('/admin');
-        } else {
-          navigate(redirectTarget === '/admin' ? '/dashboard' : redirectTarget);
-        }
-      }
-    } else if (res.error) {
-      playUiSound('notification');
-      setFormError(res.error);
-      showToast(res.error, 'error');
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,7 +84,7 @@ export const SignInPage: React.FC = () => {
             </div>
             <h1 className="text-2xl font-black tracking-tight text-slate-100">Sign In to Platform</h1>
             <p className="text-xs text-slate-400">
-              Sign in with Google for live Supabase Cloud sync, or use your registered Gmail & password.
+              Sign in with your registered Gmail address & password.
             </p>
           </div>
 
@@ -114,41 +93,6 @@ export const SignInPage: React.FC = () => {
               {formError}
             </div>
           )}
-
-          <button
-            type="button"
-            onClick={handleGoogleSignIn}
-            disabled={loading}
-            className="btn-premium-glass w-full py-3.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                fill="#EA4335"
-                d="M12 10.2v3.9h5.5c-.24 1.26-.96 2.33-2.04 3.04l3.3 2.56c1.93-1.78 3.04-4.4 3.04-7.5 0-.72-.06-1.41-.19-2.08H12z"
-              />
-              <path
-                fill="#4285F4"
-                d="M12 22c2.75 0 5.06-.91 6.75-2.47l-3.3-2.56c-.91.61-2.08.98-3.45.98-2.65 0-4.9-1.79-5.71-4.2H2.88v2.64C4.56 19.73 8.01 22 12 22z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M6.29 13.75c-.2-.61-.32-1.26-.32-1.95s.12-1.34.32-1.95V7.21H2.88A9.96 9.96 0 0 0 1.8 11.8c0 1.65.4 3.21 1.08 4.59l3.41-2.64z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 5.65c1.5 0 2.84.52 3.9 1.53l2.92-2.92C17.05 2.61 14.74 1.6 12 1.6 8.01 1.6 4.56 3.87 2.88 7.21l3.41 2.64C7.1 7.44 9.35 5.65 12 5.65z"
-              />
-            </svg>
-            <span>Continue with Google (Supabase DB)</span>
-          </button>
-
-          <div className="relative flex items-center py-0.5">
-            <div className="flex-grow border-t border-slate-800" />
-            <span className="shrink mx-3 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
-              or with Gmail & Password
-            </span>
-            <div className="flex-grow border-t border-slate-800" />
-          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

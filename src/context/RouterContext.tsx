@@ -23,7 +23,6 @@ const APP_ROUTE_PREFIXES = [
   '/payment',
   '/support',
   '/admin',
-  '/supabase-export',
 ];
 
 function isKnownAppPath(pathname: string): boolean {

@@ -23,14 +23,11 @@ import {
   Layers,
   Edit,
   X,
-  Download,
 } from 'lucide-react';
-import { useRouter } from '../../context/RouterContext';
 
 export const AdminSettingsPage: React.FC = () => {
   const dbTick = useDbSync();
   const { updateProfile } = useAuth();
-  const { navigate } = useRouter();
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'content' | 'cpa' | 'proxies' | 'browsers' | 'security'>('content');
@@ -119,8 +116,8 @@ export const AdminSettingsPage: React.FC = () => {
 
   const handleUpdateAdminPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminNewPassword.length < 6) {
-      showToast('Password must be at least 6 characters.', 'error');
+    if (adminNewPassword.length < 8) {
+      showToast('Password must be at least 8 characters.', 'error');
       return;
     }
     if (adminNewPassword !== adminConfirmPassword) {
@@ -154,23 +151,13 @@ export const AdminSettingsPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto shrink-0">
-          <button
-            type="button"
-            onClick={() => navigate('/supabase-export')}
-            className="btn-premium-glass py-2.5 px-4 rounded-xl text-xs inline-flex items-center gap-2 cursor-pointer whitespace-nowrap"
-          >
-            <Download className="w-4 h-4 text-emerald-400" />
-            <span>Supabase ZIP &amp; SQL</span>
-          </button>
-          <button
-            onClick={handleSeedAll}
-            className="btn-premium-vivid py-2.5 px-4 rounded-xl text-xs inline-flex items-center gap-2 cursor-pointer whitespace-nowrap"
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>Publish Default Catalogs</span>
-          </button>
-        </div>
+        <button
+          onClick={handleSeedAll}
+          className="btn-premium-vivid py-2.5 px-4 rounded-xl text-xs inline-flex items-center gap-2 self-start sm:self-auto cursor-pointer whitespace-nowrap shrink-0"
+        >
+          <Sparkles className="w-4 h-4" />
+          <span>Publish Default Catalogs</span>
+        </button>
       </div>
 
       {/* Tabs */}

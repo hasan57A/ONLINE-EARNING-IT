@@ -240,7 +240,7 @@ export const HomePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-violet-600 selection:text-white relative overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-transparent text-slate-100 selection:bg-violet-600 selection:text-white relative overflow-hidden">
       <Navbar />
 
       {/* Dynamic Theme-Reactive Ambient Glows */}
@@ -265,8 +265,9 @@ export const HomePage: React.FC = () => {
       {/* ============================================================
           01. HERO SECTION — Editorial Value Prop + Live Sampler
          ============================================================ */}
-      <section className="relative z-10 pt-10 pb-16 lg:pt-20 lg:pb-24 border-b border-slate-800/70 bg-subtle-grid">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
+      <section className="relative z-10 pt-10 pb-16 lg:pt-20 lg:pb-24 border-b border-slate-800/70">
+        <div className="pointer-events-none absolute inset-0 bg-subtle-grid opacity-55" aria-hidden="true" />
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
             {/* Left Column: Headline & Primary Conversion Action */}
             <motion.div
@@ -700,7 +701,7 @@ export const HomePage: React.FC = () => {
       {/* ============================================================
           02. CLICKABLE TOOL MARQUEE RIBBON
          ============================================================ */}
-      <section className="relative z-10 py-6 border-b border-slate-800/70 bg-slate-950/70">
+      <section className="relative z-10 py-6 border-b border-slate-800/70 bg-slate-900/20 backdrop-blur-sm">
         <Marquee speed={44}>
           {[...tools, ...tools].map((t, i) => {
             const isFree = t.slug === 'text-shuffler' || t.slug === 'duplicate-text-remover';
@@ -810,7 +811,7 @@ export const HomePage: React.FC = () => {
       {/* ============================================================
           05. SCROLL-PARALLAX COMMAND WORKBENCH SHOWCASE
          ============================================================ */}
-      <section className="relative z-10 py-20 border-b border-slate-800/70 bg-slate-950">
+      <section className="relative z-10 py-20 border-b border-slate-800/70">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <Reveal className="oe-panel oe-rgb-violet rounded-3xl p-6 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch overflow-hidden relative">
             <div className="lg:col-span-6 flex flex-col justify-between space-y-6">
@@ -888,7 +889,7 @@ export const HomePage: React.FC = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
                 <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between px-4 py-2.5 rounded-xl bg-black/75 backdrop-blur-md border border-white/15 text-[11px]">
                   <span className="font-mono text-white font-semibold">Live Credit & Pool Console</span>
-                  <span className="text-emerald-400 font-bold">Realtime Supabase Sync</span>
+                  <span className="text-emerald-400 font-bold">Zero-Duplicate Engine</span>
                 </div>
               </div>
             </div>
@@ -1019,7 +1020,7 @@ export const HomePage: React.FC = () => {
       {/* ============================================================
           07. MEMBERSHIP CREDIT PACKAGES
          ============================================================ */}
-      <section id="pricing-section" className="relative z-10 py-24 border-b border-slate-800/70 bg-slate-950">
+      <section id="pricing-section" className="relative z-10 py-24 border-b border-slate-800/70">
         <div id="plans" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
           <Reveal className="text-center space-y-3">
             <p className="text-xs font-bold text-violet-300 tracking-wide">
@@ -1176,7 +1177,7 @@ export const HomePage: React.FC = () => {
       {/* ============================================================
           09. INTERACTIVE LEAD & INQUIRY STUDIO
          ============================================================ */}
-      <section id="contact-section" className="relative z-10 py-24 bg-slate-950">
+      <section id="contact-section" className="relative z-10 py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <Reveal className="space-y-6">

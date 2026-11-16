@@ -26,7 +26,6 @@ import {
   Server,
   Layers,
   CreditCard,
-  Cloud,
   Coins,
   Lock,
   Crown,
@@ -62,7 +61,7 @@ function isPathLockedForFreeUser(targetPath: string): boolean {
 export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   useDbSync();
   const { path, navigate } = useRouter();
-  const { user, isAuthenticated, isAdmin, cloudConnected, signInWithGoogle, signOut } = useAuth();
+  const { user, isAuthenticated, isAdmin, signOut } = useAuth();
   const { showToast } = useToast();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -632,22 +631,6 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                 {toolAccess.isAdmin ? 'Unlimited' : `${toolAccess.remainingCredits.toLocaleString()} Cr`}
               </span>
             </button>
-
-            {cloudConnected ? (
-              <span className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[11px] font-medium">
-                <Cloud className="w-3.5 h-3.5" />
-                <span>Supabase Synced</span>
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => void signInWithGoogle()}
-                className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-700 bg-slate-900 hover:border-violet-500/40 text-slate-300 text-[11px] font-medium cursor-pointer"
-              >
-                <Cloud className="w-3.5 h-3.5 text-violet-400" />
-                <span>Supabase Sync</span>
-              </button>
-            )}
 
             <ThemeSwitcher />
 

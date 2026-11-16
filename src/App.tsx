@@ -20,7 +20,6 @@ import { AdminLayout } from './components/layout/AdminLayout';
 import { HomePage } from './pages/HomePage';
 import { SignUpPage } from './pages/auth/SignUpPage';
 import { SignInPage } from './pages/auth/SignInPage';
-import { SupabaseExportPage } from './pages/SupabaseExportPage';
 
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { ToolsListPage } from './pages/tools/ToolsListPage';
@@ -68,9 +67,6 @@ const AppRoutes: React.FC = () => {
   }
   if (path === '/signin') {
     return <SignInPage />;
-  }
-  if (path === '/supabase-export') {
-    return <SupabaseExportPage />;
   }
 
   // Admin Routes (Rendered inside AdminLayout)

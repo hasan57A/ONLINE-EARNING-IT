@@ -15,7 +15,6 @@ import {
   Menu,
   X,
   CreditCard,
-  Cloud,
   Search,
   Bell,
   Megaphone,
@@ -29,7 +28,7 @@ import { playUiSound } from '../../services/sound';
 export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   useDbSync();
   const { path, navigate } = useRouter();
-  const { user, isAuthenticated, isAdmin, cloudConnected, signInWithGoogle, signOut } = useAuth();
+  const { user, isAuthenticated, isAdmin, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -336,22 +335,6 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
-            {cloudConnected ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[11px] font-medium">
-                <Cloud className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Supabase Synced</span>
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => void signInWithGoogle()}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-violet-500/40 bg-violet-500/10 hover:bg-violet-500/20 text-violet-200 text-[11px] font-semibold transition-colors cursor-pointer"
-              >
-                <Cloud className="w-3.5 h-3.5 text-violet-400" />
-                <span>Sync Supabase</span>
-              </button>
-            )}
-
             <ThemeSwitcher />
 
             <button

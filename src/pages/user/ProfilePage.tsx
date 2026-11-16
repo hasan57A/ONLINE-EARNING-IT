@@ -141,8 +141,8 @@ export const ProfilePage: React.FC = () => {
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    if (newPassword.length < 6) {
-      showToast('Password must be at least 6 characters long.', 'error');
+    if (newPassword.length < 8) {
+      showToast('Password must be at least 8 characters long.', 'error');
       return;
     }
     if (newPassword !== confirmPassword) {
