@@ -327,8 +327,11 @@ function showBanner(message: string) {
       'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:99999;max-width:90vw;' +
       'background:#b91c1c;color:#fff;padding:10px 16px;border-radius:10px;font:14px sans-serif;' +
       'box-shadow:0 4px 16px rgba(0,0,0,.35)';
+    el.title = 'Click to close';
+    el.style.cursor = 'pointer';
+    el.onclick = () => el.remove();
     document.body.appendChild(el);
-    setTimeout(() => el.remove(), 9000);
+    setTimeout(() => el.remove(), 30000);
   } catch {
     /* ignore */
   }
@@ -1172,11 +1175,40 @@ class DatabaseService {
       users[idx].credits = nextCredits;
       users[idx].usedCredits = nextUsedCredits;
       users[idx].updatedAt = nowIso;
+      // Credits are saved on the server by deduct_credits() below, so the normal
+      // profile sync must not try to send this change a second time.
+      const usersSynced = this.synced[STORAGE_KEYS.USERS] || (this.synced[STORAGE_KEYS.USERS] = new Map());
+      usersSynced.set(String(users[idx].id), JSON.stringify(users[idx]));
       this.setItem(STORAGE_KEYS.USERS, users);
     }
     if (current && current.id === userId) {
       this.setCurrentUser({ ...current, credits: nextCredits, usedCredits: nextUsedCredits, updatedAt: nowIso });
     }
+
+    // Save the deduction in the database (atomic, runs on the server)
+    this.enqueue(async () => {
+      const { data, error } = await supabase.rpc('deduct_credits', { amount: cleanAmount });
+      if (!error) {
+        if (data === null || data === undefined) {
+          throw new Error('Credits could not be deducted in the database (no active package).');
+        }
+        return;
+      }
+      // Fallback: the database function is missing or failed, so save the new balance directly
+      console.error('deduct_credits failed, saving the balance directly:', error);
+      const { data: sess } = await supabase.auth.getSession();
+      const uid = sess.session?.user.id;
+      if (!uid) throw error;
+      const { data: updated, error: updErr } = await supabase
+        .from('profiles')
+        .update({ credits: nextCredits, used_credits: nextUsedCredits })
+        .eq('id', uid)
+        .select('credits');
+      if (updErr) throw new Error(`${error.message} / ${updErr.message}`);
+      if (!updated || updated.length === 0) {
+        throw new Error(`${error.message} / no profile row was updated`);
+      }
+    });
 
     return { success: true, remainingCredits: nextCredits };
   }
