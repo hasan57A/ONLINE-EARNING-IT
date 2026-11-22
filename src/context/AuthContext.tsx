@@ -1,14 +1,34 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from '../types';
 import { db } from '../services/db';
+import { authApi, ApiAuthResponse, OtpPurpose } from '../services/authApi';
+import { supabase } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
   loading: boolean;
-  signIn: (gmail: string, pass: string) => Promise<{ success: boolean; user?: User; error?: string }>;
-  signUp: (fullName: string, mobile: string, gmail: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  signIn: (
+    gmail: string,
+    pass: string
+  ) => Promise<{ success: boolean; user?: User; emailNotVerified?: boolean; error?: string }>;
+  signUp: (
+    fullName: string,
+    mobile: string,
+    gmail: string,
+    pass: string
+  ) => Promise<ApiAuthResponse>;
+  verifyEmailOtp: (email: string, otp: string) => Promise<ApiAuthResponse>;
+  resendOtp: (email: string, purpose: OtpPurpose) => Promise<ApiAuthResponse>;
+  requestPasswordReset: (email: string) => Promise<ApiAuthResponse>;
+  verifyResetOtp: (email: string, otp: string) => Promise<ApiAuthResponse>;
+  resetPassword: (
+    email: string,
+    resetToken: string,
+    newPassword: string,
+    confirmPassword: string
+  ) => Promise<ApiAuthResponse>;
   signOut: () => void;
   updateProfile: (data: {
     fullName?: string;
@@ -43,12 +63,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (gmail: string, pass: string) => {
     setLoading(true);
     try {
-      const res = await db.authenticate(gmail, pass);
-      if (res.success && res.user) {
-        setUser(res.user);
-        return { success: true, user: res.user };
+      const cleanEmail = gmail.trim().toLowerCase();
+      const apiRes = await authApi.login({ email: cleanEmail, password: pass });
+
+      if (apiRes.success && apiRes.profile) {
+        const synced = await db.syncAuthProfile(apiRes.profile);
+        db.setCurrentUser(synced);
+        setUser(synced);
+        return { success: true, user: synced };
       }
-      return { success: false, error: res.error || 'Authentication failed' };
+
+      if (apiRes.emailNotVerified || apiRes.code === 'EMAIL_NOT_VERIFIED') {
+        return {
+          success: false,
+          emailNotVerified: true,
+          error:
+            apiRes.error ||
+            'Your email is not verified yet. Please verify your 6-digit OTP before signing in.',
+        };
+      }
+
+      // Preserve compatibility for pre-existing local-only users/admins not yet in backend store
+      if (apiRes.code === 'USER_NOT_FOUND' || apiRes.code === 'NETWORK_ERROR') {
+        const localRes = await db.authenticate(cleanEmail, pass);
+        if (localRes.success && localRes.user) {
+          setUser(localRes.user);
+          return { success: true, user: localRes.user };
+        }
+        return {
+          success: false,
+          emailNotVerified: localRes.emailNotVerified,
+          error: localRes.error || apiRes.error || 'Authentication failed',
+        };
+      }
+
+      return { success: false, error: apiRes.error || 'Authentication failed' };
     } catch {
       return { success: false, error: 'An unexpected error occurred during sign in.' };
     } finally {
@@ -56,24 +105,118 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signUp = async (fullName: string, mobile: string, gmail: string, pass: string) => {
+  const signUp = async (
+    fullName: string,
+    mobile: string,
+    gmail: string,
+    pass: string
+  ): Promise<ApiAuthResponse> => {
     setLoading(true);
     try {
-      const res = await db.registerUser(fullName, mobile, gmail, pass);
-      if (res.success && res.user) {
-        db.setCurrentUser(res.user);
-        setUser(res.user);
-        return { success: true };
+      const cleanEmail = gmail.trim().toLowerCase();
+      const apiRes = await authApi.register({
+        fullName: fullName.trim(),
+        mobile: mobile.trim(),
+        email: cleanEmail,
+        password: pass,
+      });
+
+      if (apiRes.success) {
+        // Keep local registry synced as unverified (user is NOT logged in until OTP verified)
+        await db.registerUser(fullName, mobile, cleanEmail, pass);
       }
-      return { success: false, error: res.error || 'Registration failed' };
+
+      return apiRes;
     } catch {
-      return { success: false, error: 'An unexpected error occurred during registration.' };
+      return {
+        success: false,
+        error: 'An unexpected error occurred during registration.',
+      };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyEmailOtp = async (email: string, otp: string): Promise<ApiAuthResponse> => {
+    setLoading(true);
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const res = await authApi.verifyOtp({
+        email: cleanEmail,
+        otp: otp.trim(),
+        purpose: 'email_verification',
+      });
+      if (res.success) {
+        await db.markEmailVerified(cleanEmail);
+        if (res.profile) {
+          await db.syncAuthProfile(res.profile);
+        }
+      }
+      return res;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resendOtp = async (email: string, purpose: OtpPurpose): Promise<ApiAuthResponse> => {
+    setLoading(true);
+    try {
+      return await authApi.resendOtp({ email: email.trim().toLowerCase(), purpose });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const requestPasswordReset = async (email: string): Promise<ApiAuthResponse> => {
+    setLoading(true);
+    try {
+      return await authApi.forgotPassword({ email: email.trim().toLowerCase() });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyResetOtp = async (email: string, otp: string): Promise<ApiAuthResponse> => {
+    setLoading(true);
+    try {
+      return await authApi.verifyOtp({
+        email: email.trim().toLowerCase(),
+        otp: otp.trim(),
+        purpose: 'password_reset',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetPassword = async (
+    email: string,
+    resetToken: string,
+    newPassword: string,
+    confirmPassword: string
+  ): Promise<ApiAuthResponse> => {
+    setLoading(true);
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const res = await authApi.resetPassword({
+        email: cleanEmail,
+        resetToken,
+        newPassword,
+        confirmPassword,
+      });
+      if (res.success) {
+        await db.syncResetPassword(cleanEmail, newPassword);
+      }
+      return res;
     } finally {
       setLoading(false);
     }
   };
 
   const signOut = () => {
+    if (supabase) {
+      supabase.auth.signOut().catch(() => {});
+    }
     db.setCurrentUser(null);
     setUser(null);
   };
@@ -106,6 +249,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         signIn,
         signUp,
+        verifyEmailOtp,
+        resendOtp,
+        requestPasswordReset,
+        verifyResetOtp,
+        resetPassword,
         signOut,
         updateProfile,
         refreshUser,

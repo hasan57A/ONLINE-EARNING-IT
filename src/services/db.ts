@@ -1,4 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
 import {
   User,
   ToolItem,
@@ -23,6 +22,21 @@ import {
   UserPreferences,
 } from '../types';
 import { findCountryGeo } from '../data/countries';
+
+// Helper for cryptographic hashing
+export async function hashPassword(password: string, salt: string): Promise<string> {
+  const enc = new TextEncoder();
+  const data = enc.encode(password + salt + 'oe_salt_pepper_2026');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+export function generateSalt(): string {
+  const arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 // Initial Tools Definition
 const DEFAULT_TOOLS: ToolItem[] = [
@@ -305,185 +319,12 @@ const DEFAULT_PAYMENT_PACKAGES: PaymentPackage[] = [
   },
 ];
 
-// ---------------------------------------------------------------------
-// Supabase connection (these two values are PUBLIC by design; the real
-// protection is the Row Level Security rules in supabase_schema.sql)
-// ---------------------------------------------------------------------
-const SUPABASE_URL: string =
-  (import.meta as any).env?.VITE_SUPABASE_URL || 'https://eqmfcgudxhnysxgbveax.supabase.co';
-const SUPABASE_KEY: string =
-  (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 'sb_publishable_XV3oVHbuYWyDTfkPzSaspA_00ldMqRh';
-
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-const toCamel = (s: string): string => s.replace(/_([a-z])/g, (_m, c: string) => c.toUpperCase());
-
-function showBanner(message: string) {
-  try {
-    if (typeof document === 'undefined') return;
-    const el = document.createElement('div');
-    el.textContent = message;
-    el.style.cssText =
-      'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:99999;max-width:90vw;' +
-      'background:#b91c1c;color:#fff;padding:10px 16px;border-radius:10px;font:14px sans-serif;' +
-      'box-shadow:0 4px 16px rgba(0,0,0,.35)';
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 9000);
-  } catch {
-    /* ignore */
-  }
-}
-
-interface TableCfg {
-  table: string;
-  kind: 'list' | 'single';
-  cols: string[];
-  order: { col: string; asc: boolean };
-  public?: boolean; // readable without logging in
-  pool?: boolean; // generator pools that users "claim" items from
-  noInsert?: boolean;
-  noDelete?: boolean;
-  alias?: Record<string, string>; // column -> object key (when not simple snake->camel)
-  noteKind?: 'user' | 'ticket'; // admin-only notes live in the admin_notes table
-  sort?: (a: any, b: any) => number;
-}
-
-const TABLES: Record<string, TableCfg> = {
-  [STORAGE_KEYS.USERS]: {
-    table: 'profiles', kind: 'list', noInsert: true,
-    cols: ['id', 'full_name', 'username', 'mobile', 'gmail', 'telegram_username', 'role', 'status', 'plan', 'plan_status', 'credits', 'used_credits', 'plan_updated_at', 'email_verified', 'telegram_verified', 'phone_verified', 'two_factor_enabled', 'last_login_at', 'created_at', 'updated_at'],
-    noteKind: 'user',
-    order: { col: 'created_at', asc: true },
-  },
-  [STORAGE_KEYS.TOOLS]: {
-    table: 'tools', kind: 'list', public: true,
-    cols: ['id', 'name', 'slug', 'description', 'category', 'enabled', 'icon_name'],
-    order: { col: 'id', asc: true },
-    sort: (a, b) => {
-      const ia = DEFAULT_TOOLS.findIndex(t => t.id === a.id);
-      const ib = DEFAULT_TOOLS.findIndex(t => t.id === b.id);
-      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
-    },
-  },
-  [STORAGE_KEYS.CPA_NETWORKS]: {
-    table: 'cpa_networks', kind: 'list', public: true,
-    cols: ['id', 'name', 'type', 'min_payment', 'description', 'join_url'],
-    order: { col: 'id', asc: true },
-  },
-  [STORAGE_KEYS.PROXY_SITES]: {
-    table: 'proxy_sites', kind: 'list', public: true,
-    cols: ['id', 'name', 'validity', 'traffic', 'price', 'buy_url'],
-    order: { col: 'id', asc: true },
-  },
-  [STORAGE_KEYS.ANTIDETECT_BROWSERS]: {
-    table: 'antidetect_browsers', kind: 'list', public: true,
-    cols: ['id', 'name', 'description', 'download_url'],
-    order: { col: 'id', asc: true },
-  },
-  [STORAGE_KEYS.WEBSITE_CONTENT]: {
-    table: 'website_content', kind: 'single', public: true, cols: [],
-    order: { col: 'id', asc: true },
-  },
-  [STORAGE_KEYS.PAYMENT_SETTINGS]: {
-    table: 'payment_settings', kind: 'single', cols: [],
-    order: { col: 'id', asc: true },
-  },
-  [STORAGE_KEYS.SUPPORT_CHANNELS]: {
-    table: 'support_channels', kind: 'list', alias: { sort_order: 'order' },
-    cols: ['id', 'type', 'name', 'handle_or_number', 'is_primary', 'status', 'visible_to_users', 'sort_order', 'created_at'],
-    order: { col: 'sort_order', asc: true },
-  },
-  [STORAGE_KEYS.ANNOUNCEMENTS]: {
-    table: 'announcements', kind: 'list',
-    cols: ['id', 'title', 'message', 'type', 'audience', 'status', 'recipients_count', 'thumbnail_variant', 'created_at'],
-    order: { col: 'created_at', asc: false },
-  },
-  [STORAGE_KEYS.UA_POOL]: {
-    table: 'user_agents', kind: 'list', pool: true,
-    cols: ['id', 'device', 'browser', 'in_app_browser', 'country', 'user_agent_string', 'used', 'used_by', 'used_at', 'created_at'],
-    order: { col: 'created_at', asc: true },
-  },
-  [STORAGE_KEYS.LEADS_POOL]: {
-    table: 'leads', kind: 'list', pool: true,
-    cols: ['id', 'full_name', 'gender', 'gmail', 'phone_number', 'country', 'used', 'used_by', 'used_at', 'created_at'],
-    order: { col: 'created_at', asc: true },
-  },
-  [STORAGE_KEYS.NUMBERS_POOL]: {
-    table: 'numbers', kind: 'list', pool: true,
-    cols: ['id', 'country', 'phone_number', 'used', 'used_by', 'used_at', 'created_at'],
-    order: { col: 'created_at', asc: true },
-  },
-  [STORAGE_KEYS.MAILS_POOL]: {
-    table: 'mails', kind: 'list', pool: true,
-    cols: ['id', 'country', 'email', 'used', 'used_by', 'used_at', 'created_at'],
-    order: { col: 'created_at', asc: true },
-  },
-  [STORAGE_KEYS.USAGE_HISTORY]: {
-    table: 'usage_history', kind: 'list',
-    cols: ['id', 'user_id', 'tool_slug', 'tool_name', 'date', 'time', 'result_count', 'status', 'summary'],
-    order: { col: 'id', asc: false },
-  },
-  [STORAGE_KEYS.SAVED_RESULTS]: {
-    table: 'saved_results', kind: 'list',
-    cols: ['id', 'user_id', 'tool_slug', 'tool_name', 'title', 'results_text', 'count', 'saved_date'],
-    order: { col: 'id', asc: false },
-  },
-  [STORAGE_KEYS.SUPPORT_TICKETS]: {
-    table: 'support_tickets', kind: 'list', noteKind: 'ticket',
-    cols: ['id', 'user_id', 'user_name', 'user_email', 'subject', 'status', 'messages', 'created_at', 'updated_at'],
-    order: { col: 'created_at', asc: false },
-  },
-  [STORAGE_KEYS.PAYMENT_REQUESTS]: {
-    table: 'payment_requests', kind: 'list',
-    cols: ['id', 'user_id', 'user_name', 'user_email', 'package_id', 'package_name', 'package_credits', 'method', 'currency', 'amount', 'sender_account', 'transaction_id', 'note', 'status', 'admin_note', 'reviewed_by', 'reviewed_at', 'created_at'],
-    order: { col: 'created_at', asc: false },
-  },
-};
-
 class DatabaseService {
   private listeners: Set<() => void> = new Set();
-  // In-memory mirror of the Supabase database. Values are JSON strings so every
-  // read returns a fresh copy (same behaviour the old localStorage version had).
-  private store: Record<string, string> = {};
-  // What the server is known to hold: key -> (row id -> JSON string of row)
-  private synced: Record<string, Map<string, string>> = {};
-  private syncedSingle: Record<string, string> = {};
-  private queue: Promise<void> = Promise.resolve();
-  private pending = 0;
-  private hydrating: Promise<void> | null = null;
-  public ready: Promise<void>;
+  private initPromise: Promise<void>;
 
   constructor() {
-    this.ready = Promise.race([
-      this.hydrate().catch(e => console.error('Initial data load failed:', e)),
-      new Promise<void>(res => setTimeout(res, 15000)),
-    ]);
-
-    try {
-      this.applyUserPreferencesToDom(this.getUserPreferences());
-    } catch {
-      /* ignore */
-    }
-
-    supabase.auth.onAuthStateChange((event: string) => {
-      if (event === 'SIGNED_OUT' && this.getCurrentUser()) {
-        setTimeout(() => {
-          this.hydrate().catch(() => undefined);
-        }, 0);
-      }
-    });
-
-    // Keep data fresh when other people (e.g. users paying, admin approving) change things.
-    setInterval(() => {
-      if (typeof document !== 'undefined' && document.hidden) return;
-      if (this.pending > 0) return;
-      this.hydrate().catch(() => undefined);
-    }, 30000);
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && this.pending === 0) this.hydrate().catch(() => undefined);
-      });
-    }
+    this.initPromise = this.initDefaults();
   }
 
   public subscribe(cb: () => void): () => void {
@@ -499,13 +340,8 @@ class DatabaseService {
 
   private getItem<T>(key: string, fallback: T): T {
     try {
-      if (key === STORAGE_KEYS.USER_PREFERENCES) {
-        // display preferences stay on this device
-        const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-        return raw ? JSON.parse(raw) : fallback;
-      }
-      const data = this.store[key];
-      return data !== undefined ? JSON.parse(data) : fallback;
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : fallback;
     } catch {
       return fallback;
     }
@@ -513,393 +349,215 @@ class DatabaseService {
 
   private setItem<T>(key: string, value: T): void {
     try {
-      if (key === STORAGE_KEYS.USER_PREFERENCES) {
-        localStorage.setItem(key, JSON.stringify(value));
-        this.notify();
-        return;
-      }
-      this.store[key] = JSON.stringify(value);
-      const cfg = TABLES[key];
-      if (cfg) this.scheduleSync(key, cfg, value);
+      localStorage.setItem(key, JSON.stringify(value));
       this.notify();
     } catch (e) {
       console.error('Storage write error:', e);
     }
   }
 
-  // ------------------------------------------------------------------
-  // Loading data from Supabase
-  // ------------------------------------------------------------------
-  public hydrate(): Promise<void> {
-    const run = () => this.doHydrate();
-    const p = (this.hydrating ?? Promise.resolve()).then(run, run);
-    this.hydrating = p;
-    const clear = () => {
-      if (this.hydrating === p) this.hydrating = null;
-    };
-    p.then(clear, clear);
-    return p;
-  }
+  // Initialize essential schema
+  private async initDefaults() {
+    if (!localStorage.getItem(STORAGE_KEYS.TOOLS)) {
+      this.setItem(STORAGE_KEYS.TOOLS, DEFAULT_TOOLS);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.WEBSITE_CONTENT)) {
+      this.setItem(STORAGE_KEYS.WEBSITE_CONTENT, DEFAULT_WEBSITE_CONTENT);
+    }
+    // Per requirements: "All public resource cards and database sections should remain empty until the admin adds information."
+    if (!localStorage.getItem(STORAGE_KEYS.CPA_NETWORKS)) {
+      this.setItem(STORAGE_KEYS.CPA_NETWORKS, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.PROXY_SITES)) {
+      this.setItem(STORAGE_KEYS.PROXY_SITES, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.ANTIDETECT_BROWSERS)) {
+      this.setItem(STORAGE_KEYS.ANTIDETECT_BROWSERS, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.UA_POOL)) {
+      this.setItem(STORAGE_KEYS.UA_POOL, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.LEADS_POOL)) {
+      this.setItem(STORAGE_KEYS.LEADS_POOL, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.NUMBERS_POOL)) {
+      this.setItem(STORAGE_KEYS.NUMBERS_POOL, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.MAILS_POOL)) {
+      this.setItem(STORAGE_KEYS.MAILS_POOL, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.PAYMENT_SETTINGS)) {
+      this.setItem(STORAGE_KEYS.PAYMENT_SETTINGS, DEFAULT_PAYMENT_GATEWAYS);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.PAYMENT_REQUESTS)) {
+      this.setItem(STORAGE_KEYS.PAYMENT_REQUESTS, []);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.SUPPORT_CHANNELS)) {
+      this.setItem(STORAGE_KEYS.SUPPORT_CHANNELS, DEFAULT_SUPPORT_CHANNELS);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.ANNOUNCEMENTS)) {
+      this.setItem(STORAGE_KEYS.ANNOUNCEMENTS, DEFAULT_ANNOUNCEMENTS);
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.USER_PREFERENCES)) {
+      this.setItem(STORAGE_KEYS.USER_PREFERENCES, DEFAULT_USER_PREFERENCES);
+    }
+    this.applyUserPreferencesToDom(this.getUserPreferences());
 
-  private async doHydrate(): Promise<void> {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const session = sessionData.session;
-    const before: Record<string, string | undefined> = { ...this.store };
+    const existingUsers = this.getItem<User[]>(STORAGE_KEYS.USERS, []);
+    let usersUpdated = false;
 
-    for (const [key, cfg] of Object.entries(TABLES)) {
-      if (!session && !cfg.public) {
-        if (cfg.kind === 'list') this.store[key] = '[]';
-        else delete this.store[key];
-        this.synced[key] = new Map();
-        continue;
-      }
-      const result = await this.fetchTable(cfg);
-      if (result === null) continue; // keep what we had on error
-      if (cfg.kind === 'list') {
-        const rows = result as any[];
-        const map = new Map<string, string>();
-        rows.forEach(r => map.set(String(r.id), JSON.stringify(r)));
-        this.synced[key] = map;
-        this.store[key] = JSON.stringify(rows);
-      } else {
-        if (result === undefined) continue;
-        const json = JSON.stringify(result);
-        this.syncedSingle[key] = json;
-        this.store[key] = json;
-      }
+    if (!localStorage.getItem(STORAGE_KEYS.USERS) || existingUsers.length === 0) {
+      const adminSalt = generateSalt();
+      const adminHash = await hashPassword('Admin@OEIT2026!', adminSalt);
+      const defaultAdmin: User = {
+        id: 'admin_master_001',
+        fullName: 'Master Administrator',
+        mobile: '+1 (555) 019-2026',
+        gmail: 'admin@onlineearningit.com',
+        passwordHash: adminHash,
+        salt: adminSalt,
+        role: 'admin',
+        status: 'active',
+        createdAt: new Date().toISOString(),
+      };
+
+      const ownerSalt = generateSalt();
+      const ownerHash = await hashPassword('Admin@OEIT2026!', ownerSalt);
+      const ownerAdmin: User = {
+        id: 'admin_owner_002',
+        fullName: 'Platform Owner',
+        mobile: '+1 (555) 019-2834',
+        gmail: 'mybusinessforunitedstates@gmail.com',
+        passwordHash: ownerHash,
+        salt: ownerSalt,
+        role: 'admin',
+        status: 'active',
+        createdAt: new Date().toISOString(),
+      };
+
+      existingUsers.push(defaultAdmin, ownerAdmin);
+      usersUpdated = true;
     }
 
-    // Work out who is logged in from their profile row
-    let current: User | null = null;
-    if (session) {
-      const users = this.getItem<User[]>(STORAGE_KEYS.USERS, []);
-      current = users.find(u => u.id === session.user.id) || null;
-      if (current && current.status === 'deactivated') {
-        await supabase.auth.signOut();
-        current = null;
-      }
-    }
-    this.store[STORAGE_KEYS.CURRENT_USER] = JSON.stringify(current);
+    // Ensure the primary owner admin account (arittechofficial@gmail.com) is always provisioned & active
+    const arittechEmail = 'arittechofficial@gmail.com';
+    const arittechIdx = existingUsers.findIndex(u => u.gmail.toLowerCase() === arittechEmail);
 
-    // Private admin notes (only admins can read them)
-    if (current && current.role === 'admin') {
-      try {
-        const { data: noteRows, error } = await supabase.from('admin_notes').select('key,note').limit(5000);
-        if (error) throw error;
-        const notes: Record<string, string> = {};
-        (noteRows || []).forEach((r: { key: string; note: string }) => {
-          notes[r.key] = r.note;
-        });
-        this.applyNotes(STORAGE_KEYS.USERS, 'user', notes);
-        this.applyNotes(STORAGE_KEYS.SUPPORT_TICKETS, 'ticket', notes);
-      } catch (e) {
-        console.error('Could not load admin notes:', e);
-      }
-    }
-
-    let changed = false;
-    for (const k of new Set([...Object.keys(before), ...Object.keys(this.store)])) {
-      if (before[k] !== this.store[k]) changed = true;
-    }
-    if (changed) this.notify();
-  }
-
-  private applyNotes(storeKey: string, kind: 'user' | 'ticket', notes: Record<string, string>) {
-    const raw = this.store[storeKey];
-    if (!raw) return;
-    const list: any[] = JSON.parse(raw);
-    const map = this.synced[storeKey] || (this.synced[storeKey] = new Map());
-    let touched = false;
-    for (const item of list) {
-      const n = notes[kind + ':' + item.id];
-      if (n !== undefined) {
-        item.adminNote = n;
-        map.set(String(item.id), JSON.stringify(item));
-        touched = true;
-      }
-    }
-    if (touched) this.store[storeKey] = JSON.stringify(list);
-  }
-
-  private async fetchTable(cfg: TableCfg): Promise<any[] | any | null> {
-    try {
-      if (cfg.kind === 'single') {
-        const { data, error } = await supabase.from(cfg.table).select('data').eq('id', 1).maybeSingle();
-        if (error) throw error;
-        return data ? data.data : undefined;
-      }
-      const rows: any[] = [];
-      const PAGE = 1000;
-      for (let from = 0; ; from += PAGE) {
-        const q = supabase
-          .from(cfg.table)
-          .select(cfg.cols.join(','))
-          .order(cfg.order.col, { ascending: cfg.order.asc })
-          .order('id', { ascending: true })
-          .range(from, from + PAGE - 1);
-        const { data, error } = await q;
-        if (error) throw error;
-        const got = (data as any[]) || [];
-        rows.push(...got);
-        if (got.length < PAGE) break;
-      }
-      let mapped = rows.map(r => this.rowIn(r, cfg));
-      if (cfg.sort) mapped = mapped.sort(cfg.sort);
-      return mapped;
-    } catch (e) {
-      console.error(`Could not load "${cfg.table}":`, e);
-      return null;
-    }
-  }
-
-  private rowIn(row: any, cfg: TableCfg): any {
-    const out: any = {};
-    for (const [k, v] of Object.entries(row)) {
-      if (v === null || v === undefined) continue;
-      out[cfg.alias?.[k] ?? toCamel(k)] = v;
-    }
-    if (cfg.table === 'profiles') {
-      out.passwordHash = '';
-      out.salt = '';
-    }
-    return out;
-  }
-
-  private rowOutInsert(item: any, cfg: TableCfg): any {
-    const out: any = {};
-    for (const col of cfg.cols) {
-      const v = item[cfg.alias?.[col] ?? toCamel(col)];
-      if (v !== undefined && v !== null) out[col] = v;
-    }
-    return out;
-  }
-
-  private rowOutUpdate(prev: any, item: any, cfg: TableCfg): any {
-    const out: any = {};
-    for (const col of cfg.cols) {
-      if (col === 'id') continue;
-      const key = cfg.alias?.[col] ?? toCamel(col);
-      const a = JSON.stringify(prev[key]);
-      const b = JSON.stringify(item[key]);
-      if (a !== b) out[col] = item[key] === undefined ? null : item[key];
-    }
-    return out;
-  }
-
-  // ------------------------------------------------------------------
-  // Saving data to Supabase
-  // ------------------------------------------------------------------
-  private enqueue(fn: () => Promise<void>) {
-    this.pending++;
-    this.queue = this.queue
-      .then(fn)
-      .catch(e => this.syncError(e))
-      .finally(() => {
-        this.pending--;
+    if (arittechIdx === -1) {
+      const arittechSalt = generateSalt();
+      const arittechHash = await hashPassword('Arifinazad99@#@', arittechSalt);
+      existingUsers.push({
+        id: 'admin_arittech_003',
+        fullName: 'Arittech Official',
+        mobile: '+8801700000000',
+        gmail: arittechEmail,
+        passwordHash: arittechHash,
+        salt: arittechSalt,
+        role: 'admin',
+        status: 'active',
+        createdAt: new Date().toISOString(),
       });
-  }
-
-  private syncError(e: any) {
-    console.error('Database save error:', e);
-    const msg = (e && (e.message || e.error_description)) || 'Unknown error';
-    showBanner('Could not save to the database: ' + msg);
-    this.hydrate().catch(() => undefined);
-  }
-
-  private scheduleSync(key: string, cfg: TableCfg, value: any) {
-    if (cfg.kind === 'single') {
-      const json = JSON.stringify(value);
-      if (this.syncedSingle[key] === json) return;
-      this.syncedSingle[key] = json;
-      this.enqueue(async () => {
-        const { error } = await supabase.from(cfg.table).upsert({ id: 1, data: value });
-        if (error) throw error;
-      });
-      return;
+      usersUpdated = true;
+    } else if (existingUsers[arittechIdx].role !== 'admin' || existingUsers[arittechIdx].status !== 'active') {
+      const arittechSalt = generateSalt();
+      const arittechHash = await hashPassword('Arifinazad99@#@', arittechSalt);
+      existingUsers[arittechIdx].salt = arittechSalt;
+      existingUsers[arittechIdx].passwordHash = arittechHash;
+      existingUsers[arittechIdx].role = 'admin';
+      existingUsers[arittechIdx].status = 'active';
+      usersUpdated = true;
     }
 
-    const synced = this.synced[key] || (this.synced[key] = new Map());
-    const list = value as any[];
-    const seen = new Set<string>();
-    const inserts: any[] = [];
-    const updates: { id: string; payload: any }[] = [];
-    const noteOps: { key: string; note: string | null }[] = [];
-    const isAdminNow = this.getCurrentUser()?.role === 'admin';
-
-    for (const item of list) {
-      const id = String(item.id);
-      seen.add(id);
-      const json = JSON.stringify(item);
-      const prev = synced.get(id);
-      if (prev === undefined) {
-        inserts.push(item);
-        synced.set(id, json);
-        if (cfg.noteKind && isAdminNow && item.adminNote) noteOps.push({ key: cfg.noteKind + ':' + id, note: item.adminNote });
-      } else if (prev !== json) {
-        const prevObj = JSON.parse(prev);
-        if (cfg.noteKind && isAdminNow && (prevObj.adminNote ?? '') !== (item.adminNote ?? '')) {
-          noteOps.push({ key: cfg.noteKind + ':' + id, note: item.adminNote ? item.adminNote : null });
-        }
-        const payload = this.rowOutUpdate(prevObj, item, cfg);
-        synced.set(id, json);
-        if (Object.keys(payload).length > 0) updates.push({ id, payload });
-      }
+    if (usersUpdated) {
+      this.setItem(STORAGE_KEYS.USERS, existingUsers);
     }
-    const deletes: string[] = [];
-    for (const id of Array.from(synced.keys())) {
-      if (!seen.has(id)) {
-        deletes.push(id);
-        synced.delete(id);
-        if (cfg.noteKind && isAdminNow) noteOps.push({ key: cfg.noteKind + ':' + id, note: null });
-      }
+
+    // Keep current logged-in session role synced with ADMIN_EMAILS whitelist
+    const current = this.getItem<User | null>(STORAGE_KEYS.CURRENT_USER, null);
+    if (current && this.ADMIN_EMAILS.includes(current.gmail.toLowerCase()) && current.role !== 'admin') {
+      this.setItem(STORAGE_KEYS.CURRENT_USER, { ...current, role: 'admin', status: 'active' });
     }
-    if (!inserts.length && !updates.length && !deletes.length && !noteOps.length) return;
-
-    this.enqueue(async () => {
-      // 1) inserts
-      if (!cfg.noInsert && inserts.length) {
-        const rows = inserts.map(i => this.rowOutInsert(i, cfg));
-        for (let i = 0; i < rows.length; i += 400) {
-          const { error } = await supabase.from(cfg.table).insert(rows.slice(i, i + 400));
-          if (error) throw error;
-        }
-      }
-
-      // 2) updates
-      if (updates.length) {
-        if (cfg.pool) {
-          // group identical changes so thousands of "used" flags become a few requests
-          const groups = new Map<string, { ids: string[]; payload: any }>();
-          for (const u of updates) {
-            const rest = { ...u.payload };
-            delete rest.used_at;
-            const gk = JSON.stringify(rest);
-            const g = groups.get(gk) || { ids: [], payload: { ...u.payload } };
-            g.ids.push(u.id);
-            groups.set(gk, g);
-          }
-          for (const g of groups.values()) {
-            for (let i = 0; i < g.ids.length; i += 200) {
-              let q = supabase.from(cfg.table).update(g.payload).in('id', g.ids.slice(i, i + 200));
-              if (g.payload.used === true) q = q.eq('used', false);
-              const { error } = await q.select('id');
-              if (error) throw error;
-            }
-          }
-        } else {
-          for (let i = 0; i < updates.length; i += 10) {
-            await Promise.all(
-              updates.slice(i, i + 10).map(async u => {
-                const { data, error } = await supabase
-                  .from(cfg.table)
-                  .update(u.payload)
-                  .eq('id', u.id)
-                  .select('id');
-                if (error) throw error;
-                if (!data || data.length === 0) {
-                  throw new Error('Permission denied or record not found (' + cfg.table + ')');
-                }
-              })
-            );
-          }
-        }
-      }
-
-      // 3) deletes
-      if (!cfg.noDelete && deletes.length) {
-        for (let i = 0; i < deletes.length; i += 200) {
-          const chunk = deletes.slice(i, i + 200);
-          const { data, error } = await supabase.from(cfg.table).delete().in('id', chunk).select('id');
-          if (error) throw error;
-          if (!data || data.length < chunk.length) {
-            throw new Error('Permission denied: some records could not be deleted (' + cfg.table + ')');
-          }
-        }
-      }
-
-      // 4) private admin notes
-      for (const op of noteOps) {
-        if (op.note === null) {
-          const { error } = await supabase.from('admin_notes').delete().eq('key', op.key);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase
-            .from('admin_notes')
-            .upsert({ key: op.key, note: op.note, updated_at: new Date().toISOString() });
-          if (error) throw error;
-        }
-      }
-
-      // Pools can be claimed by two people at once: reload so we show the truth.
-      if (cfg.pool && this.pending === 1) await this.hydrate();
-    });
   }
 
-  // ------------------------------------------------------------------
-  // Users & Auth (Supabase Auth)
-  // ------------------------------------------------------------------
+  // Master Admin Whitelist (Strict Access: Only designated site owner accounts have admin privileges)
+  private readonly ADMIN_EMAILS = [
+    'arittechofficial@gmail.com',
+    'mybusinessforunitedstates@gmail.com',
+    'admin@onlineearningit.com',
+  ];
+
+  // --- Users & Auth ---
   public getUsers(): User[] {
     return this.getItem<User[]>(STORAGE_KEYS.USERS, []);
   }
 
   public async registerUser(fullName: string, mobile: string, gmail: string, pass: string): Promise<{ success: boolean; error?: string; user?: User }> {
+    await this.initPromise;
+    const users = this.getUsers();
     const cleanEmail = gmail.trim().toLowerCase();
 
     if (!cleanEmail.endsWith('@gmail.com')) {
       return { success: false, error: 'Registration requires a valid Gmail address (@gmail.com).' };
     }
-    if (pass.length < 8) {
-      return { success: false, error: 'Password must be at least 8 characters.' };
+    if (users.some(u => u.gmail.toLowerCase() === cleanEmail)) {
+      return { success: false, error: 'This Gmail address is already registered. Please sign in.' };
+    }
+    if (pass.length < 6) {
+      return { success: false, error: 'Password must be at least 6 characters.' };
     }
 
-    const { data, error } = await supabase.auth.signUp({
-      email: cleanEmail,
-      password: pass,
-      options: { data: { full_name: fullName.trim(), mobile: mobile.trim() } },
-    });
+    const salt = generateSalt();
+    const passwordHash = await hashPassword(pass, salt);
 
-    if (error) {
-      const m = (error.message || '').toLowerCase();
-      if (m.includes('already registered') || m.includes('already been registered')) {
-        return { success: false, error: 'This Gmail address is already registered. Please sign in.' };
-      }
-      return { success: false, error: error.message || 'Registration failed.' };
-    }
-    if (!data.session) {
-      return {
-        success: false,
-        error: 'Account created. Please confirm your email using the link we sent you, then sign in.',
-      };
-    }
+    // Only the verified owner email gets admin; all regular users strictly get 'user' role
+    const isOwnerAdmin = this.ADMIN_EMAILS.includes(cleanEmail);
 
-    await this.hydrate();
-    const user = this.getCurrentUser();
-    if (!user) {
-      return { success: false, error: 'Account was created but your profile could not be loaded. Please sign in again.' };
-    }
-    return { success: true, user };
+    const newUser: User = {
+      id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      fullName: fullName.trim(),
+      mobile: mobile.trim(),
+      gmail: cleanEmail,
+      passwordHash,
+      salt,
+      role: isOwnerAdmin ? 'admin' : 'user',
+      status: 'active',
+      planStatus: 'none',
+      credits: 0,
+      createdAt: new Date().toISOString(),
+    };
+
+    users.push(newUser);
+    this.setItem(STORAGE_KEYS.USERS, users);
+    return { success: true, user: newUser };
   }
 
   public async authenticate(gmail: string, pass: string): Promise<{ success: boolean; error?: string; user?: User }> {
+    await this.initPromise;
+    const users = this.getUsers();
     const cleanEmail = gmail.trim().toLowerCase();
-    const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password: pass });
-    if (error) {
-      const m = (error.message || '').toLowerCase();
-      if (m.includes('not confirmed')) {
-        return { success: false, error: 'Please confirm your email address first, then sign in.' };
-      }
-      return { success: false, error: 'Incorrect Gmail or password. Please try again.' };
+    const user = users.find(u => u.gmail.toLowerCase() === cleanEmail);
+
+    if (!user) {
+      return { success: false, error: 'No account found with this Gmail address.' };
     }
 
-    await this.hydrate();
-    const user = this.getCurrentUser();
-    if (!user) {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        return { success: false, error: 'Your account has been deactivated by the administrator. Please contact support.' };
-      }
-      return { success: false, error: 'Could not load your profile. Please try again.' };
+    if (user.status === 'deactivated') {
+      return { success: false, error: 'Your account has been deactivated by the administrator. Please contact support.' };
     }
+
+    const computedHash = await hashPassword(pass, user.salt);
+    if (computedHash !== user.passwordHash) {
+      return { success: false, error: 'Incorrect password. Please try again.' };
+    }
+
+    // Strict security guarantee: Only whitelisted owner email addresses can hold admin privileges
+    if (this.ADMIN_EMAILS.includes(cleanEmail)) {
+      user.role = 'admin';
+    } else {
+      user.role = 'user';
+    }
+
+    this.setCurrentUser(user);
     return { success: true, user };
   }
 
@@ -908,24 +566,7 @@ class DatabaseService {
   }
 
   public setCurrentUser(user: User | null): void {
-    if (user === null) {
-      this.store[STORAGE_KEYS.CURRENT_USER] = 'null';
-      // forget private data immediately, then end the Supabase session
-      for (const [key, cfg] of Object.entries(TABLES)) {
-        if (!cfg.public) {
-          if (cfg.kind === 'list') this.store[key] = '[]';
-          else delete this.store[key];
-          this.synced[key] = new Map();
-        }
-      }
-      this.notify();
-      supabase.auth.signOut().finally(() => {
-        this.hydrate().catch(() => undefined);
-      });
-      return;
-    }
-    this.store[STORAGE_KEYS.CURRENT_USER] = JSON.stringify(user);
-    this.notify();
+    this.setItem(STORAGE_KEYS.CURRENT_USER, user);
   }
 
   public getUserById(userId: string): User | undefined {
@@ -957,19 +598,9 @@ class DatabaseService {
       newPassword?: string;
     }
   ): Promise<{ success: boolean; error?: string }> {
-    if (data.newPassword) {
-      if (data.newPassword.length < 8) {
-        return { success: false, error: 'Password must be at least 8 characters' };
-      }
-      const { error } = await supabase.auth.updateUser({ password: data.newPassword });
-      if (error) return { success: false, error: error.message };
-    }
-
     const users = this.getUsers();
     const idx = users.findIndex(u => u.id === userId);
-    if (idx === -1) {
-      return data.newPassword ? { success: true } : { success: false, error: 'User not found' };
-    }
+    if (idx === -1) return { success: false, error: 'User not found' };
 
     if (data.fullName !== undefined) users[idx].fullName = data.fullName.trim();
     if (data.username !== undefined) users[idx].username = data.username.trim().replace(/^@/, '');
@@ -981,6 +612,14 @@ class DatabaseService {
     }
     if (data.twoFactorEnabled !== undefined) {
       users[idx].twoFactorEnabled = data.twoFactorEnabled;
+    }
+    if (data.newPassword) {
+      if (data.newPassword.length < 6) {
+        return { success: false, error: 'Password must be at least 6 characters' };
+      }
+      const newSalt = generateSalt();
+      users[idx].salt = newSalt;
+      users[idx].passwordHash = await hashPassword(data.newPassword, newSalt);
     }
     users[idx].updatedAt = new Date().toISOString();
     this.setItem(STORAGE_KEYS.USERS, users);
@@ -1020,11 +659,8 @@ class DatabaseService {
   public adminDeleteUser(userId: string): { success: boolean; error?: string } {
     const target = this.getUserById(userId);
     if (!target) return { success: false, error: 'User not found.' };
-    if (target.role === 'admin') {
-      return { success: false, error: 'Admin accounts cannot be deleted. Change the role to User first.' };
-    }
-    if (this.getCurrentUser()?.id === userId) {
-      return { success: false, error: 'You cannot delete your own account.' };
+    if (this.ADMIN_EMAILS.includes(target.gmail.toLowerCase())) {
+      return { success: false, error: 'Master owner accounts cannot be deleted.' };
     }
     const next = this.getUsers().filter(u => u.id !== userId);
     this.setItem(STORAGE_KEYS.USERS, next);
@@ -1210,11 +846,10 @@ class DatabaseService {
       this.setCurrentUser(users[idx]);
     }
 
-
     return { success: true };
   }
 
-    // --- Tools Management ---
+  // --- Tools Management ---
   public getTools(): ToolItem[] {
     return this.getItem<ToolItem[]>(STORAGE_KEYS.TOOLS, DEFAULT_TOOLS);
   }
@@ -1269,14 +904,11 @@ class DatabaseService {
     statusFilter: 'all' | 'available' | 'used' = 'all'
   ): number {
     const pool = this.getUserAgents();
-    const removedIds: string[] = [];
     const kept = pool.filter(u => {
       const deviceMatches = deviceFilter === 'All' ? true : u.device === deviceFilter;
       const statusMatches =
         statusFilter === 'available' ? !u.used : statusFilter === 'used' ? u.used : true;
-      const shouldRemove = deviceMatches && statusMatches;
-      if (shouldRemove) removedIds.push(u.id);
-      return !shouldRemove;
+      return !(deviceMatches && statusMatches);
     });
     const removedCount = pool.length - kept.length;
     this.setItem(STORAGE_KEYS.UA_POOL, kept);
@@ -1284,7 +916,6 @@ class DatabaseService {
   }
 
   public deleteAllUserAgents(): void {
-    const allIds = this.getUserAgents().map(u => u.id);
     this.setItem(STORAGE_KEYS.UA_POOL, []);
   }
 
@@ -1331,23 +962,48 @@ class DatabaseService {
       };
     }
 
-    // Strict device isolation: if a specific device is requested, NEVER return another device's UA.
+    // Strict device, browser, and in-app browser isolation:
+    // NEVER return another device's, browser's, or in-app browser's UA.
     const strictDevice = filters.device && filters.device !== 'Any' ? filters.device : undefined;
-    const devicePool = strictDevice
-      ? availablePool.filter(item => (item.device as string) === strictDevice)
-      : availablePool;
+    const strictBrowser = filters.browser && filters.browser !== 'Any' ? filters.browser : undefined;
+    const strictInApp =
+      filters.inAppBrowser === 'Any'
+        ? undefined
+        : filters.inAppBrowser && filters.inAppBrowser !== ''
+        ? filters.inAppBrowser
+        : 'None';
 
-    if (devicePool.length === 0) {
+    const matchesStrictCriteria = (item: UserAgentEntry): boolean => {
+      if (item.used) return false;
+      if (strictDevice && (item.device as string) !== strictDevice) return false;
+      if (strictBrowser && (item.browser || 'None') !== strictBrowser) return false;
+      if (strictInApp !== undefined && (item.inAppBrowser || 'None') !== strictInApp) return false;
+      return true;
+    };
+
+    const strictPool = pool.filter(matchesStrictCriteria);
+
+    if (strictPool.length === 0) {
+      const filterDesc = [
+        strictDevice,
+        strictBrowser === 'None' ? 'No Browser' : strictBrowser,
+        strictInApp && strictInApp !== 'None' ? strictInApp : undefined,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+
       return {
         results: [],
         fromPoolCount: 0,
         generatedCount: 0,
-        error: `No unused ${strictDevice || 'matching'} User Agents in the Database Pool. Please upload ${strictDevice || ''} User Agents in the Admin Panel first.`,
+        error: `No unused ${filterDesc || 'matching'} User Agents in the Database Pool. Please upload ${
+          filterDesc || 'matching'
+        } User Agents in the Admin Panel first.`,
       };
     }
 
     const matching: UserAgentEntry[] = [];
-    const sameDeviceFallback: UserAgentEntry[] = [];
+    const sameFilterCountryFallback: UserAgentEntry[] = [];
     const targetQty = Math.max(1, Math.min(1000, filters.quantity));
     const isGlobalCountry =
       !filters.country ||
@@ -1355,31 +1011,18 @@ class DatabaseService {
       filters.country === 'All Countries' ||
       filters.country === 'No Language System';
 
-    // First pass: match exact device + optional browser, inAppBrowser, and country
-    for (const item of pool) {
-      if (item.used) continue;
-      if (strictDevice && (item.device as string) !== strictDevice) continue;
-
+    // First pass: match exact device + browser + inAppBrowser + country (or global entries)
+    for (const item of strictPool) {
       if (matching.length < targetQty) {
-        let match = true;
-        if (filters.browser && filters.browser !== 'None' && filters.browser !== 'Any' && (item.browser as string) !== filters.browser) {
-          match = false;
-        }
-        if (filters.inAppBrowser && filters.inAppBrowser !== 'None' && filters.inAppBrowser !== 'Any' && (item.inAppBrowser as string) !== filters.inAppBrowser) {
-          match = false;
-        }
-        if (
-          !isGlobalCountry &&
-          item.country &&
-          item.country !== 'Any' &&
-          item.country !== 'All Countries' &&
-          item.country !== 'No Language System' &&
-          item.country !== filters.country
-        ) {
-          match = false;
-        }
+        const countryMatches =
+          isGlobalCountry ||
+          !item.country ||
+          item.country === 'Any' ||
+          item.country === 'All Countries' ||
+          item.country === 'No Language System' ||
+          item.country === filters.country;
 
-        if (match) {
+        if (countryMatches) {
           item.used = true;
           item.usedBy = userId;
           item.usedAt = new Date().toISOString();
@@ -1388,16 +1031,16 @@ class DatabaseService {
         }
       }
 
-      // Keep same-device candidates only as secondary fallback
-      sameDeviceFallback.push(item);
+      // Keep same device + same browser + same inAppBrowser entries for country fallback only
+      sameFilterCountryFallback.push(item);
     }
 
-    // Second pass: if fewer than targetQty matched optional browser/country filters,
-    // relax browser/country ONLY within the EXACT SAME selected device.
+    // Second pass: if fewer than targetQty matched the specific country,
+    // relax country ONLY within the EXACT SAME device + browser + inAppBrowser.
     if (matching.length < targetQty) {
-      for (let i = 0; i < sameDeviceFallback.length && matching.length < targetQty; i++) {
-        const candidate = sameDeviceFallback[i];
-        if (!candidate.used && (!strictDevice || (candidate.device as string) === strictDevice)) {
+      for (let i = 0; i < sameFilterCountryFallback.length && matching.length < targetQty; i++) {
+        const candidate = sameFilterCountryFallback[i];
+        if (!candidate.used) {
           candidate.used = true;
           candidate.usedBy = userId;
           candidate.usedAt = new Date().toISOString();
@@ -1415,7 +1058,7 @@ class DatabaseService {
         results: [],
         fromPoolCount: 0,
         generatedCount: 0,
-        error: `No available ${strictDevice || ''} User Agents found in database pool. Please upload more in the Admin Panel.`,
+        error: `No available ${strictDevice || ''} ${strictBrowser || ''} User Agents found in database pool. Please upload more in the Admin Panel.`,
       };
     }
 
@@ -1449,26 +1092,26 @@ class DatabaseService {
       if (filters.isBrowserVersionOn && activeBrowserVersions.length > 0) {
         const v = activeBrowserVersions[idx % activeBrowserVersions.length].trim();
         if (v) {
-          const b = filters.browser || 'Chrome';
-          if (b === 'Chrome' || updated.includes('Chrome/')) {
-            if (/Chrome\/[0-9]+(\.[0-9]+)*/.test(updated)) {
-              updated = updated.replace(/Chrome\/[0-9]+(\.[0-9]+)*/g, `Chrome/${v}`);
+          const b = filters.browser && filters.browser !== 'None' ? filters.browser : undefined;
+          if (b === 'Opera') {
+            if (/(OPR|Opera)\/[0-9]+(\.[0-9]+)*/.test(updated)) {
+              updated = updated.replace(/(OPR|Opera)\/[0-9]+(\.[0-9]+)*/g, `OPR/${v}`);
             }
-          } else if (b === 'Firefox' || updated.includes('Firefox/')) {
-            if (/Firefox\/[0-9]+(\.[0-9]+)*/.test(updated)) {
-              updated = updated.replace(/Firefox\/[0-9]+(\.[0-9]+)*/g, `Firefox/${v}`);
+          } else if (b === 'Edge') {
+            if (/(Edg|EdgA|EdgiOS|Edge)\/[0-9]+(\.[0-9]+)*/.test(updated)) {
+              updated = updated.replace(/(Edg|EdgA|EdgiOS|Edge)\/[0-9]+(\.[0-9]+)*/g, `$1/${v}`);
             }
-          } else if (b === 'Safari' || updated.includes('Version/')) {
+          } else if (b === 'Firefox') {
+            if (/(Firefox|FxiOS)\/[0-9]+(\.[0-9]+)*/.test(updated)) {
+              updated = updated.replace(/(Firefox|FxiOS)\/[0-9]+(\.[0-9]+)*/g, `$1/${v}`);
+            }
+          } else if (b === 'Safari') {
             if (/Version\/[0-9]+(\.[0-9]+)*/.test(updated)) {
               updated = updated.replace(/Version\/[0-9]+(\.[0-9]+)*/g, `Version/${v}`);
             }
-          } else if (b === 'Edge' || updated.includes('Edg/')) {
-            if (/(Edg|Edge)\/[0-9]+(\.[0-9]+)*/.test(updated)) {
-              updated = updated.replace(/(Edg|Edge)\/[0-9]+(\.[0-9]+)*/g, `Edg/${v}`);
-            }
-          } else if (b === 'Opera' || updated.includes('OPR/')) {
-            if (/(OPR|Opera)\/[0-9]+(\.[0-9]+)*/.test(updated)) {
-              updated = updated.replace(/(OPR|Opera)\/[0-9]+(\.[0-9]+)*/g, `OPR/${v}`);
+          } else if (b === 'Chrome') {
+            if (/(Chrome|CriOS)\/[0-9]+(\.[0-9]+)*/.test(updated)) {
+              updated = updated.replace(/(Chrome|CriOS)\/[0-9]+(\.[0-9]+)*/g, `$1/${v}`);
             }
           }
         }
@@ -1609,14 +1252,12 @@ class DatabaseService {
 
   public deleteUsedLeads(): number {
     const pool = this.getLeads();
-    const usedIds = pool.filter(l => l.used).map(l => l.id);
     const kept = pool.filter(l => !l.used);
     this.setItem(STORAGE_KEYS.LEADS_POOL, kept);
     return pool.length - kept.length;
   }
 
   public deleteAllLeads(): void {
-    const allIds = this.getLeads().map(l => l.id);
     this.setItem(STORAGE_KEYS.LEADS_POOL, []);
   }
 
@@ -1758,14 +1399,12 @@ class DatabaseService {
 
   public deleteUsedNumbers(): number {
     const pool = this.getNumbers();
-    const usedIds = pool.filter(n => n.used).map(n => n.id);
     const kept = pool.filter(n => !n.used);
     this.setItem(STORAGE_KEYS.NUMBERS_POOL, kept);
     return pool.length - kept.length;
   }
 
   public deleteAllNumbers(): void {
-    const allIds = this.getNumbers().map(n => n.id);
     this.setItem(STORAGE_KEYS.NUMBERS_POOL, []);
   }
 
@@ -1891,14 +1530,12 @@ class DatabaseService {
 
   public deleteUsedMails(): number {
     const pool = this.getMails();
-    const usedIds = pool.filter(m => m.used).map(m => m.id);
     const kept = pool.filter(m => !m.used);
     this.setItem(STORAGE_KEYS.MAILS_POOL, kept);
     return pool.length - kept.length;
   }
 
   public deleteAllMails(): void {
-    const allIds = this.getMails().map(m => m.id);
     this.setItem(STORAGE_KEYS.MAILS_POOL, []);
   }
 
@@ -2462,7 +2099,6 @@ class DatabaseService {
 
   public clearUsageHistory(userId: string): void {
     const history = this.getItem<UsageHistoryEntry[]>(STORAGE_KEYS.USAGE_HISTORY, []);
-    const removedIds = history.filter(h => h.userId === userId).map(h => h.id);
     const filtered = history.filter(h => h.userId !== userId);
     this.setItem(STORAGE_KEYS.USAGE_HISTORY, filtered);
   }
@@ -2689,9 +2325,8 @@ class DatabaseService {
 
     const users = this.getUsers();
     const uIdx = users.findIndex(u => u.id === req.userId);
-    let nextCredits = grantedCredits;
     if (uIdx !== -1) {
-      nextCredits = Math.max(0, Math.floor(Number(users[uIdx].credits ?? 0))) + grantedCredits;
+      const nextCredits = Math.max(0, Math.floor(Number(users[uIdx].credits ?? 0))) + grantedCredits;
       users[uIdx].plan = req.packageName;
       users[uIdx].planStatus = 'active';
       users[uIdx].credits = nextCredits;
@@ -2704,7 +2339,6 @@ class DatabaseService {
         this.setCurrentUser(users[uIdx]);
       }
     }
-
 
     return { success: true };
   }
@@ -2727,11 +2361,9 @@ class DatabaseService {
 
     const users = this.getUsers();
     const uIdx = users.findIndex(u => u.id === req.userId);
-    let nextPlanStatus: 'none' | 'pending' | 'active' = 'none';
     if (uIdx !== -1 && users[uIdx].planStatus !== 'active') {
       const hasOtherPending = requests.some(r => r.userId === req.userId && r.status === 'pending');
-      nextPlanStatus = hasOtherPending ? 'pending' : 'none';
-      users[uIdx].planStatus = nextPlanStatus;
+      users[uIdx].planStatus = hasOtherPending ? 'pending' : 'none';
       users[uIdx].updatedAt = new Date().toISOString();
       this.setItem(STORAGE_KEYS.USERS, users);
 
@@ -2740,7 +2372,6 @@ class DatabaseService {
         this.setCurrentUser(users[uIdx]);
       }
     }
-
 
     return { success: true };
   }
@@ -2896,19 +2527,21 @@ class DatabaseService {
       );
       return { ticketId: ticket.id, saved: true };
     }
-    const id = 'inq_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-    void supabase
-      .from('contact_inquiries')
-      .insert({
-        id,
-        name: data.name.trim().slice(0, 200),
-        email: data.email.trim().slice(0, 200),
-        message: data.message.trim().slice(0, 5000),
-      })
-      .then(({ error }: { error: unknown }) => {
-        if (error) console.error('Contact inquiry could not be saved:', error);
+    try {
+      const key = 'oe_contact_inquiries';
+      const existing = this.getItem<Array<{ id: string; name: string; email: string; message: string; createdAt: string }>>(key, []);
+      existing.unshift({
+        id: 'inq_' + Date.now(),
+        name: data.name.trim(),
+        email: data.email.trim(),
+        message: data.message.trim(),
+        createdAt: new Date().toISOString(),
       });
-    return { saved: true };
+      this.setItem(key, existing.slice(0, 50));
+      return { saved: true };
+    } catch {
+      return { saved: false };
+    }
   }
 }
 

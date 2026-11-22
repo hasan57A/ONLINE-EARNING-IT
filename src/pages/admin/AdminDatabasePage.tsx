@@ -675,7 +675,11 @@ export const AdminDatabasePage: React.FC = () => {
                           <span className="font-bold text-slate-100">{item.device}</span>
                           <span className="text-slate-500">·</span>
                           <span className="text-violet-300 font-medium">
-                            {item.inAppBrowser !== 'None' ? `${item.inAppBrowser} (In-App)` : item.browser}
+                            {item.inAppBrowser !== 'None'
+                              ? item.browser !== 'None'
+                                ? `${item.browser} · ${item.inAppBrowser} (In-App)`
+                                : `${item.inAppBrowser} (In-App)`
+                              : item.browser}
                           </span>
                           <span className="text-slate-500">·</span>
                           <span className="text-slate-400">{item.country}</span>
