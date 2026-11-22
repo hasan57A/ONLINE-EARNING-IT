@@ -63,7 +63,7 @@ export const SignUpPage: React.FC = () => {
     if (res.success) {
       playUiSound('notification');
       showToast('Account created successfully. Please sign in.', 'success');
-      navigate(`/signin?registered=1&email=${encodeURIComponent(cleanEmail)}`);
+      navigate(`/signin?email=${encodeURIComponent(cleanEmail)}&registered=1`);
     } else {
       playUiSound('notification');
       setFormError(res.error || 'Registration failed. Please try again.');
@@ -107,7 +107,7 @@ export const SignUpPage: React.FC = () => {
             </div>
             <h1 className="text-2xl font-black tracking-tight text-slate-100">Create Your Account</h1>
             <p className="text-xs text-slate-400">
-              Create your account with your Gmail address. No email verification code is required.
+              Create your account with your email address and password.
             </p>
           </div>
 
@@ -162,7 +162,7 @@ export const SignUpPage: React.FC = () => {
                 />
               </div>
               <span className="block text-[11px] text-slate-500 mt-1">
-                Your Gmail address will be used for account login and password recovery.
+                Use an email address you can access.
               </span>
             </div>
 

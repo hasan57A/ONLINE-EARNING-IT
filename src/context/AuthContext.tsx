@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from '../types';
 import { db } from '../services/db';
-import { authApi, ApiAuthResponse, OtpPurpose } from '../services/authApi';
+import { authApi, ApiAuthResponse } from '../services/authApi';
 import { supabase } from '../lib/supabase';
 
 interface AuthContextType {
@@ -12,22 +12,12 @@ interface AuthContextType {
   signIn: (
     gmail: string,
     pass: string
-  ) => Promise<{ success: boolean; user?: User; emailNotVerified?: boolean; error?: string }>;
+  ) => Promise<{ success: boolean; user?: User; error?: string }>;
   signUp: (
     fullName: string,
     mobile: string,
     gmail: string,
     pass: string
-  ) => Promise<ApiAuthResponse>;
-  verifyEmailOtp: (email: string, otp: string) => Promise<ApiAuthResponse>;
-  resendOtp: (email: string, purpose: OtpPurpose) => Promise<ApiAuthResponse>;
-  requestPasswordReset: (email: string) => Promise<ApiAuthResponse>;
-  verifyResetOtp: (email: string, otp: string) => Promise<ApiAuthResponse>;
-  resetPassword: (
-    email: string,
-    resetToken: string,
-    newPassword: string,
-    confirmPassword: string
   ) => Promise<ApiAuthResponse>;
   signOut: () => void;
   updateProfile: (data: {
@@ -73,15 +63,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true, user: synced };
       }
 
-      if (apiRes.emailNotVerified || apiRes.code === 'EMAIL_NOT_VERIFIED') {
-        return {
-          success: false,
-          emailNotVerified: true,
-          error:
-            apiRes.error ||
-            'Your email is not verified yet. Please verify your 6-digit OTP before signing in.',
-        };
-      }
 
       // Preserve compatibility for pre-existing local-only users/admins not yet in backend store
       if (apiRes.code === 'USER_NOT_FOUND' || apiRes.code === 'NETWORK_ERROR') {
@@ -92,7 +73,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         return {
           success: false,
-          emailNotVerified: localRes.emailNotVerified,
           error: localRes.error || apiRes.error || 'Authentication failed',
         };
       }
@@ -122,95 +102,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (apiRes.success) {
-        // Email verification is disabled; create a locally verified account record.
-        const localResult = await db.registerUser(fullName, mobile, cleanEmail, pass);
-        if (localResult.user) {
-          localResult.user.emailVerified = true;
-        }
+        // Keep the local registry in sync with the newly created account.
+        await db.registerUser(fullName, mobile, cleanEmail, pass);
       }
 
-      return { ...apiRes, requiresVerification: false, verified: Boolean(apiRes.success) };
+      return apiRes;
     } catch {
       return {
         success: false,
         error: 'An unexpected error occurred during registration.',
       };
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const verifyEmailOtp = async (email: string, otp: string): Promise<ApiAuthResponse> => {
-    setLoading(true);
-    try {
-      const cleanEmail = email.trim().toLowerCase();
-      const res = await authApi.verifyOtp({
-        email: cleanEmail,
-        otp: otp.trim(),
-        purpose: 'email_verification',
-      });
-      if (res.success) {
-        await db.markEmailVerified(cleanEmail);
-        if (res.profile) {
-          await db.syncAuthProfile(res.profile);
-        }
-      }
-      return res;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const resendOtp = async (email: string, purpose: OtpPurpose): Promise<ApiAuthResponse> => {
-    setLoading(true);
-    try {
-      return await authApi.resendOtp({ email: email.trim().toLowerCase(), purpose });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const requestPasswordReset = async (email: string): Promise<ApiAuthResponse> => {
-    setLoading(true);
-    try {
-      return await authApi.forgotPassword({ email: email.trim().toLowerCase() });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const verifyResetOtp = async (email: string, otp: string): Promise<ApiAuthResponse> => {
-    setLoading(true);
-    try {
-      return await authApi.verifyOtp({
-        email: email.trim().toLowerCase(),
-        otp: otp.trim(),
-        purpose: 'password_reset',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const resetPassword = async (
-    email: string,
-    resetToken: string,
-    newPassword: string,
-    confirmPassword: string
-  ): Promise<ApiAuthResponse> => {
-    setLoading(true);
-    try {
-      const cleanEmail = email.trim().toLowerCase();
-      const res = await authApi.resetPassword({
-        email: cleanEmail,
-        resetToken,
-        newPassword,
-        confirmPassword,
-      });
-      if (res.success) {
-        await db.syncResetPassword(cleanEmail, newPassword);
-      }
-      return res;
     } finally {
       setLoading(false);
     }
@@ -252,11 +153,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         signIn,
         signUp,
-        verifyEmailOtp,
-        resendOtp,
-        requestPasswordReset,
-        verifyResetOtp,
-        resetPassword,
         signOut,
         updateProfile,
         refreshUser,

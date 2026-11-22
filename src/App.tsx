@@ -68,9 +68,6 @@ const AppRoutes: React.FC = () => {
   if (path === '/signin') {
     return <SignInPage />;
   }
-  if (path === '/forgot-password') {
-    return <SignInPage />;
-  }
 
   // Admin Routes (Rendered inside AdminLayout)
   if (path.startsWith('/admin')) {
