@@ -521,6 +521,7 @@ class DatabaseService {
       salt,
       role: isOwnerAdmin ? 'admin' : 'user',
       status: 'active',
+      emailVerified: true,
       planStatus: 'none',
       credits: 0,
       createdAt: new Date().toISOString(),

@@ -122,11 +122,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (apiRes.success) {
-        // Keep local registry synced as unverified (user is NOT logged in until OTP verified)
-        await db.registerUser(fullName, mobile, cleanEmail, pass);
+        // Email verification is disabled; create a locally verified account record.
+        const localResult = await db.registerUser(fullName, mobile, cleanEmail, pass);
+        if (localResult.user) {
+          localResult.user.emailVerified = true;
+        }
       }
 
-      return apiRes;
+      return { ...apiRes, requiresVerification: false, verified: Boolean(apiRes.success) };
     } catch {
       return {
         success: false,

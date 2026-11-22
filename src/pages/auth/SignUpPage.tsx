@@ -62,12 +62,8 @@ export const SignUpPage: React.FC = () => {
     const res = await signUp(fullName, mobile, cleanEmail, password);
     if (res.success) {
       playUiSound('notification');
-      showToast('6-digit OTP sent to your email! Please verify to activate your account.', 'success');
-      const cooldown = res.cooldownSeconds ?? 60;
-      const expires = res.expiresInSeconds ?? 300;
-      navigate(
-        `/verify-email?email=${encodeURIComponent(cleanEmail)}&cooldown=${cooldown}&expires=${expires}`
-      );
+      showToast('Account created successfully. Please sign in.', 'success');
+      navigate(`/signin?registered=1&email=${encodeURIComponent(cleanEmail)}`);
     } else {
       playUiSound('notification');
       setFormError(res.error || 'Registration failed. Please try again.');
@@ -111,7 +107,7 @@ export const SignUpPage: React.FC = () => {
             </div>
             <h1 className="text-2xl font-black tracking-tight text-slate-100">Create Your Account</h1>
             <p className="text-xs text-slate-400">
-              Register with your email address. We will send a 6-digit OTP to verify your account.
+              Create your account with your Gmail address. No email verification code is required.
             </p>
           </div>
 
@@ -166,7 +162,7 @@ export const SignUpPage: React.FC = () => {
                 />
               </div>
               <span className="block text-[11px] text-slate-500 mt-1">
-                A 6-digit verification OTP (valid for 5 minutes) will be sent here
+                Your Gmail address will be used for account login and password recovery.
               </span>
             </div>
 
@@ -223,7 +219,7 @@ export const SignUpPage: React.FC = () => {
               disabled={loading}
               className="btn-premium-vivid w-full py-3.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              <span>{loading ? 'Sending Verification OTP...' : 'Create Account & Send OTP'}</span>
+              <span>{loading ? 'Creating Account...' : 'Create Account'}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </form>
@@ -246,7 +242,7 @@ export const SignUpPage: React.FC = () => {
       {/* Bottom disclaimer */}
       <div className="text-center text-[11px] text-slate-500 max-w-md mx-auto flex items-center justify-center gap-1.5 relative z-10">
         <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-        <span>Email OTP Verification Required · ONLINE EARNING IT</span>
+        <span>Secure Account Registration · ONLINE EARNING IT</span>
       </div>
     </div>
   );

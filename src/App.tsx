@@ -20,8 +20,6 @@ import { AdminLayout } from './components/layout/AdminLayout';
 import { HomePage } from './pages/HomePage';
 import { SignUpPage } from './pages/auth/SignUpPage';
 import { SignInPage } from './pages/auth/SignInPage';
-import { VerifyEmailPage } from './pages/auth/VerifyEmailPage';
-import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { ToolsListPage } from './pages/tools/ToolsListPage';
@@ -70,11 +68,8 @@ const AppRoutes: React.FC = () => {
   if (path === '/signin') {
     return <SignInPage />;
   }
-  if (path === '/verify-email') {
-    return <VerifyEmailPage />;
-  }
   if (path === '/forgot-password') {
-    return <ForgotPasswordPage />;
+    return <SignInPage />;
   }
 
   // Admin Routes (Rendered inside AdminLayout)

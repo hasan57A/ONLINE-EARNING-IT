@@ -25,7 +25,6 @@ export const SignInPage: React.FC = () => {
   const redirectTarget = queryParams.get('redirect') || '/dashboard';
   const prefillEmail = queryParams.get('email') || '';
   const isVerifiedNotice = queryParams.get('verified') === '1';
-  const isResetNotice = queryParams.get('reset') === '1';
 
   const [gmail, setGmail] = useState(prefillEmail);
   const [password, setPassword] = useState('');
@@ -141,13 +140,11 @@ export const SignInPage: React.FC = () => {
             </p>
           </div>
 
-          {(isVerifiedNotice || isResetNotice) && !formError && (
+          {isVerifiedNotice && !formError && (
             <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>
-                {isVerifiedNotice
-                  ? 'Email verified successfully! You can now sign in.'
-                  : 'Password reset complete! Sign in with your new password.'}
+                Email verified successfully! You can now sign in.
               </span>
             </div>
           )}
@@ -191,21 +188,8 @@ export const SignInPage: React.FC = () => {
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="mb-1.5">
                 <label className="block text-xs font-semibold text-slate-300">Password</label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    playUiSound('click');
-                    const clean = gmail.trim().toLowerCase();
-                    navigate(
-                      clean ? `/forgot-password?email=${encodeURIComponent(clean)}` : '/forgot-password'
-                    );
-                  }}
-                  className="text-[11px] font-semibold text-violet-300 hover:text-violet-200 cursor-pointer whitespace-nowrap"
-                >
-                  Forgot Password?
-                </button>
               </div>
               <div className="relative">
                 <Lock className="w-4 h-4 text-violet-400 absolute left-3.5 top-3" />
