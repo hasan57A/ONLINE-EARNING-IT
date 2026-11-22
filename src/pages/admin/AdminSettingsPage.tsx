@@ -116,8 +116,8 @@ export const AdminSettingsPage: React.FC = () => {
 
   const handleUpdateAdminPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminNewPassword.length < 6) {
-      showToast('Password must be at least 6 characters.', 'error');
+    if (adminNewPassword.length < 8) {
+      showToast('Password must be at least 8 characters.', 'error');
       return;
     }
     if (adminNewPassword !== adminConfirmPassword) {

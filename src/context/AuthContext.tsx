@@ -1,24 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from '../types';
 import { db } from '../services/db';
-import { authApi, ApiAuthResponse } from '../services/authApi';
-import { supabase } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
   loading: boolean;
-  signIn: (
-    gmail: string,
-    pass: string
-  ) => Promise<{ success: boolean; user?: User; error?: string }>;
-  signUp: (
-    fullName: string,
-    mobile: string,
-    gmail: string,
-    pass: string
-  ) => Promise<ApiAuthResponse>;
+  signIn: (gmail: string, pass: string) => Promise<{ success: boolean; user?: User; error?: string }>;
+  signUp: (fullName: string, mobile: string, gmail: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => void;
   updateProfile: (data: {
     fullName?: string;
@@ -53,31 +43,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (gmail: string, pass: string) => {
     setLoading(true);
     try {
-      const cleanEmail = gmail.trim().toLowerCase();
-      const apiRes = await authApi.login({ email: cleanEmail, password: pass });
-
-      if (apiRes.success && apiRes.profile) {
-        const synced = await db.syncAuthProfile(apiRes.profile);
-        db.setCurrentUser(synced);
-        setUser(synced);
-        return { success: true, user: synced };
+      const res = await db.authenticate(gmail, pass);
+      if (res.success && res.user) {
+        setUser(res.user);
+        return { success: true, user: res.user };
       }
-
-
-      // Preserve compatibility for pre-existing local-only users/admins not yet in backend store
-      if (apiRes.code === 'USER_NOT_FOUND' || apiRes.code === 'NETWORK_ERROR') {
-        const localRes = await db.authenticate(cleanEmail, pass);
-        if (localRes.success && localRes.user) {
-          setUser(localRes.user);
-          return { success: true, user: localRes.user };
-        }
-        return {
-          success: false,
-          error: localRes.error || apiRes.error || 'Authentication failed',
-        };
-      }
-
-      return { success: false, error: apiRes.error || 'Authentication failed' };
+      return { success: false, error: res.error || 'Authentication failed' };
     } catch {
       return { success: false, error: 'An unexpected error occurred during sign in.' };
     } finally {
@@ -85,42 +56,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signUp = async (
-    fullName: string,
-    mobile: string,
-    gmail: string,
-    pass: string
-  ): Promise<ApiAuthResponse> => {
+  const signUp = async (fullName: string, mobile: string, gmail: string, pass: string) => {
     setLoading(true);
     try {
-      const cleanEmail = gmail.trim().toLowerCase();
-      const apiRes = await authApi.register({
-        fullName: fullName.trim(),
-        mobile: mobile.trim(),
-        email: cleanEmail,
-        password: pass,
-      });
-
-      if (apiRes.success) {
-        // Keep the local registry in sync with the newly created account.
-        await db.registerUser(fullName, mobile, cleanEmail, pass);
+      const res = await db.registerUser(fullName, mobile, gmail, pass);
+      if (res.success && res.user) {
+        db.setCurrentUser(res.user);
+        setUser(res.user);
+        return { success: true };
       }
-
-      return apiRes;
+      return { success: false, error: res.error || 'Registration failed' };
     } catch {
-      return {
-        success: false,
-        error: 'An unexpected error occurred during registration.',
-      };
+      return { success: false, error: 'An unexpected error occurred during registration.' };
     } finally {
       setLoading(false);
     }
   };
 
   const signOut = () => {
-    if (supabase) {
-      supabase.auth.signOut().catch(() => {});
-    }
     db.setCurrentUser(null);
     setUser(null);
   };

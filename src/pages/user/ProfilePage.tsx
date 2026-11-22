@@ -141,8 +141,8 @@ export const ProfilePage: React.FC = () => {
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    if (newPassword.length < 6) {
-      showToast('Password must be at least 6 characters long.', 'error');
+    if (newPassword.length < 8) {
+      showToast('Password must be at least 8 characters long.', 'error');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -674,16 +674,10 @@ export const ProfilePage: React.FC = () => {
 
           <div className="space-y-2.5 text-xs">
             <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800/70 flex items-center justify-between">
-              <span className="text-slate-300 font-medium">Email OTP Verification</span>
-              <span
-                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                  latestUser?.emailVerified !== false
-                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                    : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                }`}
-              >
+              <span className="text-slate-300 font-medium">Gmail Verification</span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
                 <CheckCircle2 className="w-3 h-3" />
-                <span>{latestUser?.emailVerified !== false ? 'Verified' : 'Pending OTP'}</span>
+                <span>Verified</span>
               </span>
             </div>
 

@@ -5,18 +5,7 @@ import { useToast } from '../../components/ui/Toast';
 import { playUiSound } from '../../services/sound';
 import { AuthBackdrop } from '../../components/motion/Extras';
 import { ThemeSwitcher } from '../../components/ui/ThemeSwitcher';
-import {
-  Lock,
-  KeyRound,
-  Mail,
-  Phone,
-  User,
-  ArrowLeft,
-  ArrowRight,
-  Eye,
-  EyeOff,
-  ShieldCheck,
-} from 'lucide-react';
+import { Lock, Mail, Phone, User, ArrowLeft, ArrowRight, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 
 export const SignUpPage: React.FC = () => {
   const { navigate } = useRouter();
@@ -27,9 +16,7 @@ export const SignUpPage: React.FC = () => {
   const [mobile, setMobile] = useState('');
   const [gmail, setGmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formError, setFormError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,26 +31,22 @@ export const SignUpPage: React.FC = () => {
       setFormError('Please enter your mobile number.');
       return;
     }
-    const cleanEmail = gmail.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      setFormError('Please enter a valid email address.');
+    const cleanGmail = gmail.trim().toLowerCase();
+    if (!cleanGmail.endsWith('@gmail.com')) {
+      setFormError('Registration requires a valid Gmail address (@gmail.com).');
       return;
     }
-    if (password.length < 6) {
-      setFormError('Password must be at least 6 characters long.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setFormError('Password and Confirm Password do not match.');
+    if (password.length < 8) {
+      setFormError('Password must be at least 8 characters long.');
       return;
     }
 
     playUiSound('click');
-    const res = await signUp(fullName, mobile, cleanEmail, password);
+    const res = await signUp(fullName, mobile, cleanGmail, password);
     if (res.success) {
       playUiSound('notification');
-      showToast('Account created successfully. Please sign in.', 'success');
-      navigate(`/signin?email=${encodeURIComponent(cleanEmail)}&registered=1`);
+      showToast('Registration successful! Welcome to ONLINE EARNING IT.', 'success');
+      navigate('/dashboard');
     } else {
       playUiSound('notification');
       setFormError(res.error || 'Registration failed. Please try again.');
@@ -78,7 +61,6 @@ export const SignUpPage: React.FC = () => {
       {/* Top bar */}
       <div className="max-w-md w-full mx-auto relative z-10 flex items-center justify-between gap-3">
         <button
-          type="button"
           onClick={() => {
             playUiSound('click');
             navigate('/');
@@ -107,7 +89,7 @@ export const SignUpPage: React.FC = () => {
             </div>
             <h1 className="text-2xl font-black tracking-tight text-slate-100">Create Your Account</h1>
             <p className="text-xs text-slate-400">
-              Create your account with your email address and password.
+              Register with your Gmail address to access ONLINE EARNING IT tools.
             </p>
           </div>
 
@@ -149,7 +131,7 @@ export const SignUpPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Email Address</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Gmail Address</label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-violet-400 absolute left-3.5 top-3" />
                 <input
@@ -162,7 +144,7 @@ export const SignUpPage: React.FC = () => {
                 />
               </div>
               <span className="block text-[11px] text-slate-500 mt-1">
-                Use an email address you can access.
+                Must end with @gmail.com
               </span>
             </div>
 
@@ -173,7 +155,6 @@ export const SignUpPage: React.FC = () => {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
-                  minLength={6}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="Minimum 6 characters"
@@ -190,36 +171,12 @@ export const SignUpPage: React.FC = () => {
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">Confirm Password</label>
-              <div className="relative">
-                <KeyRound className="w-4 h-4 text-violet-400 absolute left-3.5 top-3" />
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  required
-                  minLength={6}
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  placeholder="Re-enter your password"
-                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 placeholder:text-slate-500 transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
-                  className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-200 cursor-pointer"
-                >
-                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
             <button
               type="submit"
               disabled={loading}
               className="btn-premium-vivid w-full py-3.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              <span>{loading ? 'Creating Account...' : 'Create Account'}</span>
+              <span>{loading ? 'Creating Account...' : 'Complete Sign Up'}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </form>
@@ -228,7 +185,6 @@ export const SignUpPage: React.FC = () => {
             <p className="text-xs text-slate-400">
               Already have an account?{' '}
               <button
-                type="button"
                 onClick={() => navigate('/signin')}
                 className="text-violet-300 hover:text-violet-200 font-bold cursor-pointer"
               >
@@ -242,7 +198,7 @@ export const SignUpPage: React.FC = () => {
       {/* Bottom disclaimer */}
       <div className="text-center text-[11px] text-slate-500 max-w-md mx-auto flex items-center justify-center gap-1.5 relative z-10">
         <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-        <span>Secure Account Registration · ONLINE EARNING IT</span>
+        <span>Protected by SHA-256 client cryptographic salting · ONLINE EARNING IT</span>
       </div>
     </div>
   );

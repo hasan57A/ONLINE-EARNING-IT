@@ -64,7 +64,7 @@ export const UserAgentGeneratorPage: React.FC = () => {
   useDbSync();
 
   const devices = ['iPhone', 'iPad', 'Android', 'Windows', 'macOS'] as const;
-  const browsers = ['Chrome', 'Firefox', 'Safari', 'Edge', 'Opera', 'None'] as const;
+  const browsers = ['Chrome', 'Firefox', 'Safari', 'Edge', 'Opera'] as const;
   const inAppBrowsers = [
     'None',
     'Facebook',
@@ -125,62 +125,9 @@ export const UserAgentGeneratorPage: React.FC = () => {
   const deviceStats = db.getUserAgentStatsByDevice();
   const selectedDeviceStats = deviceStats[device];
   const selectedDeviceAvailable = selectedDeviceStats.available;
-
-  const browserCounts = useMemo(() => {
-    const counts: Record<string, number> = {
-      Chrome: 0,
-      Firefox: 0,
-      Safari: 0,
-      Edge: 0,
-      Opera: 0,
-      None: 0,
-    };
-    for (const u of adminPool) {
-      if (u.used || u.device !== device) continue;
-      if ((u.inAppBrowser || 'None') !== inAppBrowser) continue;
-      const bKey = u.browser || 'None';
-      counts[bKey] = (counts[bKey] || 0) + 1;
-    }
-    return counts;
-  }, [adminPool, device, inAppBrowser]);
-
-  const inAppCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const u of adminPool) {
-      if (u.used || u.device !== device) continue;
-      if ((u.browser || 'None') !== browser) continue;
-      const iKey = u.inAppBrowser || 'None';
-      counts[iKey] = (counts[iKey] || 0) + 1;
-    }
-    return counts;
-  }, [adminPool, device, browser]);
-
-  const selectedComboAvailable = useMemo(() => {
-    return adminPool.filter(
-      u =>
-        !u.used &&
-        u.device === device &&
-        (u.browser || 'None') === browser &&
-        (u.inAppBrowser || 'None') === inAppBrowser
-    ).length;
-  }, [adminPool, device, browser, inAppBrowser]);
-
-  const availableCombosForDevice = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const u of adminPool) {
-      if (u.used || u.device !== device) continue;
-      const label =
-        u.inAppBrowser && u.inAppBrowser !== 'None'
-          ? `${u.browser !== 'None' ? `${u.browser} + ` : ''}${u.inAppBrowser}`
-          : u.browser;
-      map[label] = (map[label] || 0) + 1;
-    }
-    return Object.entries(map);
-  }, [adminPool, device]);
-
   const requestedQty = Math.min(1000, Math.max(1, Number(quantity) || 1));
   const effectiveCreditsNeeded =
-    selectedComboAvailable > 0 ? Math.min(selectedComboAvailable, requestedQty) : requestedQty;
+    selectedDeviceAvailable > 0 ? Math.min(selectedDeviceAvailable, requestedQty) : requestedQty;
   const creditAccess = db.canUseTool(user?.id, effectiveCreditsNeeded);
 
   const availableBrowsers = browsers.filter(b => {
@@ -249,7 +196,7 @@ export const UserAgentGeneratorPage: React.FC = () => {
     }
 
     const plannedQty = Math.min(1000, Math.max(1, Number(quantity) || 1));
-    const qty = selectedComboAvailable > 0 ? Math.min(selectedComboAvailable, plannedQty) : plannedQty;
+    const qty = selectedDeviceAvailable > 0 ? Math.min(selectedDeviceAvailable, plannedQty) : plannedQty;
     const access = db.canUseTool(user.id, qty);
     if (!access.allowed) {
       showToast(access.reason || 'Please take a package first to generate User Agents!', 'error');
@@ -259,22 +206,15 @@ export const UserAgentGeneratorPage: React.FC = () => {
       return;
     }
 
-    const comboLabelShort =
-      inAppBrowser !== 'None' ? `${device} · ${browser} · ${inAppBrowser}` : `${device} · ${browser}`;
-
-    if (selectedComboAvailable === 0) {
-      showToast(
-        `Cannot generate: 0 unused ${comboLabelShort} User Agents available! Admin must upload ${comboLabelShort} User Agents in the Admin Panel first.`,
-        'error'
-      );
+    if (selectedDeviceAvailable === 0) {
+      showToast(`Cannot generate: 0 unused ${device} User Agents available! Admin must upload ${device} User Agents in the Admin Panel first.`, 'error');
       return;
     }
 
     setIsGenerating(true);
 
     try {
-      const effectiveBrowserVerOn = isBrowserVersionOn && browser !== 'None';
-      const activeBrowserVersions = effectiveBrowserVerOn
+      const activeBrowserVersions = isBrowserVersionOn
         ? browserVersions.map(v => v.trim()).filter(Boolean)
         : [];
       const activeInAppVersions = isInAppVersionOn
@@ -283,13 +223,13 @@ export const UserAgentGeneratorPage: React.FC = () => {
 
       const { results, fromPoolCount, generatedCount, error } = db.consumeUserAgents(user.id, {
         device,
-        browser,
-        inAppBrowser,
+        browser: browser !== 'None' ? browser : undefined,
+        inAppBrowser: inAppBrowser !== 'None' ? inAppBrowser : undefined,
         country,
         quantity: qty,
         browserVersions: activeBrowserVersions,
         inAppVersions: activeInAppVersions,
-        isBrowserVersionOn: effectiveBrowserVerOn,
+        isBrowserVersionOn,
         isInAppVersionOn,
       });
 
@@ -429,7 +369,7 @@ export const UserAgentGeneratorPage: React.FC = () => {
     return generatedResults.filter(ua => ua.toLowerCase().includes(q));
   }, [generatedResults, searchQuery]);
 
-  const ActiveBrowserIcon = BrowserIcons[browser] || Globe2;
+  const ActiveBrowserIcon = BrowserIcons[browser] || BrowserIcons.Chrome;
   const ActiveDeviceIcon = DeviceIcons[device] || DeviceIcons.Windows;
   const ActiveInAppIcon = inAppBrowser !== 'None' ? InAppIcons[inAppBrowser] : null;
 
@@ -498,38 +438,22 @@ export const UserAgentGeneratorPage: React.FC = () => {
       />
 
       {/* Pool Alert */}
-      {poolAvailable === 0 || selectedDeviceAvailable === 0 || selectedComboAvailable === 0 ? (
-        <div className="p-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {poolAvailable === 0 || selectedDeviceAvailable === 0 ? (
+        <div className="p-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 text-xs flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Database className="w-5 h-5 text-amber-400 shrink-0" />
             <div>
               <h4 className="font-bold text-slate-100">
                 {poolAvailable === 0
                   ? 'Admin Database Pool is Empty (0 Available)'
-                  : selectedDeviceAvailable === 0
-                  ? `0 Unused "${device}" User Agents Available`
-                  : `0 Unused "${device} · ${browser}${inAppBrowser !== 'None' ? ` · ${inAppBrowser}` : ''}" User Agents Available`}
+                  : `0 Unused "${device}" User Agents Available`}
               </h4>
               <p className="text-amber-300 text-[11px] mt-0.5">
-                Strict device &amp; browser isolation active.{' '}
-                {selectedDeviceAvailable > 0 && availableCombosForDevice.length > 0 ? (
-                  <>
-                    Available for {device}:{' '}
-                    <strong className="font-mono">
-                      {availableCombosForDevice.map(([label, cnt]) => `${label} (${cnt})`).join(', ')}
-                    </strong>
-                    .
-                  </>
-                ) : (
-                  <>
-                    {device} Available: <strong className="font-mono">{selectedDeviceAvailable}</strong> / Total:{' '}
-                    <strong className="font-mono">{selectedDeviceStats.total}</strong>.
-                  </>
-                )}
+                Strict device isolation active. {device} Available: <strong className="font-mono">{selectedDeviceAvailable}</strong> / Total: <strong className="font-mono">{selectedDeviceStats.total}</strong>.
               </p>
             </div>
           </div>
-          <span className="font-mono text-[10px] font-bold text-amber-300 bg-amber-500/15 px-2.5 py-1 rounded-lg border border-amber-500/30 whitespace-nowrap self-start sm:self-auto">
+          <span className="font-mono text-[10px] font-bold text-amber-300 bg-amber-500/15 px-2.5 py-1 rounded-lg border border-amber-500/30 whitespace-nowrap">
             Upload Required
           </span>
         </div>
@@ -538,11 +462,8 @@ export const UserAgentGeneratorPage: React.FC = () => {
           <div className="flex items-center gap-2.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span className="text-slate-200">
-              <strong className="font-mono">
-                {device} · {browser}
-                {inAppBrowser !== 'None' ? ` · ${inAppBrowser}` : ''}
-              </strong>{' '}
-              pool ready — <strong className="font-mono text-emerald-300">{selectedComboAvailable}</strong> unused UAs available.
+              <strong className="font-mono">{device}</strong> pool ready —{' '}
+              <strong className="font-mono text-emerald-300">{selectedDeviceAvailable}</strong> unused UAs available ({selectedDeviceStats.used} consumed).
             </span>
           </div>
           <span className="font-mono text-[10px] font-bold text-emerald-300 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30">
@@ -626,7 +547,6 @@ export const UserAgentGeneratorPage: React.FC = () => {
             {availableBrowsers.map(b => {
               const BrowserIconComponent = BrowserIcons[b];
               const isSelected = browser === b;
-              const bAvail = browserCounts[b] || 0;
               return (
                 <button
                   key={b}
@@ -634,39 +554,22 @@ export const UserAgentGeneratorPage: React.FC = () => {
                   onClick={() => {
                     playUiSound('click');
                     setBrowser(b);
-                    if (b !== 'None') {
-                      loadDefaultBrowserVersions(b);
-                    }
+                    loadDefaultBrowserVersions(b);
                   }}
-                  className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1 relative ${
+                  className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1 ${
                     isSelected
                       ? 'border-cyan-400 bg-cyan-500/15 text-slate-100 font-bold shadow-[0_0_16px_-6px_rgba(34,211,238,0.65)]'
                       : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-slate-100'
                   }`}
                 >
-                  <span
-                    className={`absolute top-1 right-1 px-1.5 py-px leading-none rounded-full text-[9px] font-mono font-bold ${
-                      bAvail > 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800/90 text-slate-500'
-                    }`}
-                  >
-                    {bAvail}
-                  </span>
-                  {BrowserIconComponent ? (
-                    <BrowserIconComponent className="w-4 h-4" />
-                  ) : (
-                    <Globe2 className="w-4 h-4 text-slate-400" />
-                  )}
+                  <BrowserIconComponent className="w-4 h-4" />
                   <span className="text-[10px] truncate w-full">{b}</span>
                 </button>
               );
             })}
           </div>
 
-          {browser === 'None' ? (
-            <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/60 text-[11px] text-slate-400">
-              No standalone browser selected — matches pure In-App Webview entries tagged as None.
-            </div>
-          ) : isBrowserVersionOn ? (
+          {isBrowserVersionOn ? (
             <div className="p-3 rounded-2xl border border-cyan-500/25 bg-slate-950/80 space-y-1.5">
               <div className="flex items-center justify-between text-[10px]">
                 <span className="font-bold text-slate-100 flex items-center gap-1">
@@ -723,7 +626,6 @@ export const UserAgentGeneratorPage: React.FC = () => {
             {inAppBrowsers.map(iab => {
               const InAppIconComponent = iab !== 'None' ? InAppIcons[iab] : null;
               const isSelected = inAppBrowser === iab;
-              const iabAvail = inAppCounts[iab] || 0;
               return (
                 <button
                   key={iab}
@@ -733,19 +635,12 @@ export const UserAgentGeneratorPage: React.FC = () => {
                     setInAppBrowser(iab);
                     if (iab !== 'None') loadDefaultInAppVersions(iab);
                   }}
-                  className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1 relative ${
+                  className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1 ${
                     isSelected
                       ? 'border-fuchsia-400 bg-fuchsia-500/15 text-slate-100 font-bold shadow-[0_0_16px_-6px_rgba(232,121,249,0.6)]'
                       : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-slate-100'
                   }`}
                 >
-                  <span
-                    className={`absolute top-1 right-1 px-1.5 py-px leading-none rounded-full text-[9px] font-mono font-bold ${
-                      iabAvail > 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800/90 text-slate-500'
-                    }`}
-                  >
-                    {iabAvail}
-                  </span>
                   {InAppIconComponent ? (
                     <InAppIconComponent className="w-4 h-4" />
                   ) : (
@@ -912,7 +807,7 @@ export const UserAgentGeneratorPage: React.FC = () => {
             onClick={handleGenerate}
             disabled={isGenerating}
             className={`w-full py-3.5 px-4 rounded-2xl text-xs font-extrabold uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer ${
-              !creditAccess.allowed || selectedComboAvailable === 0
+              !creditAccess.allowed || selectedDeviceAvailable === 0
                 ? 'bg-slate-800 text-slate-300 border border-slate-700'
                 : 'btn-premium-vivid'
             }`}
@@ -925,11 +820,11 @@ export const UserAgentGeneratorPage: React.FC = () => {
                 ? creditAccess.hasUsablePackage
                   ? `Need ${effectiveCreditsNeeded} Cr`
                   : 'Unlock Package'
-                : selectedComboAvailable === 0
-                ? `No ${device} · ${browser} UAs`
+                : selectedDeviceAvailable === 0
+                ? `No ${device} UAs in Pool`
                 : `Generate User Agents`}
             </span>
-            {!isGenerating && creditAccess.allowed && selectedComboAvailable > 0 && (
+            {!isGenerating && creditAccess.allowed && selectedDeviceAvailable > 0 && (
               <ArrowRight className="w-4 h-4" />
             )}
           </button>

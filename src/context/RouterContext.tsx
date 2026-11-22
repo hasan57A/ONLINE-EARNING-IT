@@ -12,8 +12,6 @@ const APP_ROUTE_PREFIXES = [
   '/',
   '/signin',
   '/signup',
-  '/verify-email',
-  '/forgot-password',
   '/dashboard',
   '/tools',
   '/resources',
