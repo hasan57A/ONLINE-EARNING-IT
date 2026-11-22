@@ -1331,23 +1331,48 @@ class DatabaseService {
       };
     }
 
-    // Strict device isolation: if a specific device is requested, NEVER return another device's UA.
+    // Strict device, browser, and in-app browser isolation:
+    // NEVER return another device's, browser's, or in-app browser's UA.
     const strictDevice = filters.device && filters.device !== 'Any' ? filters.device : undefined;
-    const devicePool = strictDevice
-      ? availablePool.filter(item => (item.device as string) === strictDevice)
-      : availablePool;
+    const strictBrowser = filters.browser && filters.browser !== 'Any' ? filters.browser : undefined;
+    const strictInApp =
+      filters.inAppBrowser === 'Any'
+        ? undefined
+        : filters.inAppBrowser && filters.inAppBrowser !== ''
+        ? filters.inAppBrowser
+        : 'None';
 
-    if (devicePool.length === 0) {
+    const matchesStrictCriteria = (item: UserAgentEntry): boolean => {
+      if (item.used) return false;
+      if (strictDevice && (item.device as string) !== strictDevice) return false;
+      if (strictBrowser && (item.browser || 'None') !== strictBrowser) return false;
+      if (strictInApp !== undefined && (item.inAppBrowser || 'None') !== strictInApp) return false;
+      return true;
+    };
+
+    const strictPool = pool.filter(matchesStrictCriteria);
+
+    if (strictPool.length === 0) {
+      const filterDesc = [
+        strictDevice,
+        strictBrowser === 'None' ? 'No Browser' : strictBrowser,
+        strictInApp && strictInApp !== 'None' ? strictInApp : undefined,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+
       return {
         results: [],
         fromPoolCount: 0,
         generatedCount: 0,
-        error: `No unused ${strictDevice || 'matching'} User Agents in the Database Pool. Please upload ${strictDevice || ''} User Agents in the Admin Panel first.`,
+        error: `No unused ${filterDesc || 'matching'} User Agents in the Database Pool. Please upload ${
+          filterDesc || 'matching'
+        } User Agents in the Admin Panel first.`,
       };
     }
 
     const matching: UserAgentEntry[] = [];
-    const sameDeviceFallback: UserAgentEntry[] = [];
+    const sameFilterCountryFallback: UserAgentEntry[] = [];
     const targetQty = Math.max(1, Math.min(1000, filters.quantity));
     const isGlobalCountry =
       !filters.country ||
@@ -1355,31 +1380,18 @@ class DatabaseService {
       filters.country === 'All Countries' ||
       filters.country === 'No Language System';
 
-    // First pass: match exact device + optional browser, inAppBrowser, and country
-    for (const item of pool) {
-      if (item.used) continue;
-      if (strictDevice && (item.device as string) !== strictDevice) continue;
-
+    // First pass: match exact device + browser + inAppBrowser + country (or global entries)
+    for (const item of strictPool) {
       if (matching.length < targetQty) {
-        let match = true;
-        if (filters.browser && filters.browser !== 'None' && filters.browser !== 'Any' && (item.browser as string) !== filters.browser) {
-          match = false;
-        }
-        if (filters.inAppBrowser && filters.inAppBrowser !== 'None' && filters.inAppBrowser !== 'Any' && (item.inAppBrowser as string) !== filters.inAppBrowser) {
-          match = false;
-        }
-        if (
-          !isGlobalCountry &&
-          item.country &&
-          item.country !== 'Any' &&
-          item.country !== 'All Countries' &&
-          item.country !== 'No Language System' &&
-          item.country !== filters.country
-        ) {
-          match = false;
-        }
+        const countryMatches =
+          isGlobalCountry ||
+          !item.country ||
+          item.country === 'Any' ||
+          item.country === 'All Countries' ||
+          item.country === 'No Language System' ||
+          item.country === filters.country;
 
-        if (match) {
+        if (countryMatches) {
           item.used = true;
           item.usedBy = userId;
           item.usedAt = new Date().toISOString();
@@ -1388,16 +1400,16 @@ class DatabaseService {
         }
       }
 
-      // Keep same-device candidates only as secondary fallback
-      sameDeviceFallback.push(item);
+      // Keep same device + same browser + same inAppBrowser entries for country fallback only
+      sameFilterCountryFallback.push(item);
     }
 
-    // Second pass: if fewer than targetQty matched optional browser/country filters,
-    // relax browser/country ONLY within the EXACT SAME selected device.
+    // Second pass: if fewer than targetQty matched the specific country,
+    // relax country ONLY within the EXACT SAME device + browser + inAppBrowser.
     if (matching.length < targetQty) {
-      for (let i = 0; i < sameDeviceFallback.length && matching.length < targetQty; i++) {
-        const candidate = sameDeviceFallback[i];
-        if (!candidate.used && (!strictDevice || (candidate.device as string) === strictDevice)) {
+      for (let i = 0; i < sameFilterCountryFallback.length && matching.length < targetQty; i++) {
+        const candidate = sameFilterCountryFallback[i];
+        if (!candidate.used) {
           candidate.used = true;
           candidate.usedBy = userId;
           candidate.usedAt = new Date().toISOString();
@@ -1415,7 +1427,7 @@ class DatabaseService {
         results: [],
         fromPoolCount: 0,
         generatedCount: 0,
-        error: `No available ${strictDevice || ''} User Agents found in database pool. Please upload more in the Admin Panel.`,
+        error: `No available ${strictDevice || ''} ${strictBrowser || ''} User Agents found in database pool. Please upload more in the Admin Panel.`,
       };
     }
 
@@ -1449,26 +1461,26 @@ class DatabaseService {
       if (filters.isBrowserVersionOn && activeBrowserVersions.length > 0) {
         const v = activeBrowserVersions[idx % activeBrowserVersions.length].trim();
         if (v) {
-          const b = filters.browser || 'Chrome';
-          if (b === 'Chrome' || updated.includes('Chrome/')) {
-            if (/Chrome\/[0-9]+(\.[0-9]+)*/.test(updated)) {
-              updated = updated.replace(/Chrome\/[0-9]+(\.[0-9]+)*/g, `Chrome/${v}`);
+          const b = filters.browser && filters.browser !== 'None' ? filters.browser : undefined;
+          if (b === 'Opera') {
+            if (/(OPR|Opera)\/[0-9]+(\.[0-9]+)*/.test(updated)) {
+              updated = updated.replace(/(OPR|Opera)\/[0-9]+(\.[0-9]+)*/g, `OPR/${v}`);
             }
-          } else if (b === 'Firefox' || updated.includes('Firefox/')) {
-            if (/Firefox\/[0-9]+(\.[0-9]+)*/.test(updated)) {
-              updated = updated.replace(/Firefox\/[0-9]+(\.[0-9]+)*/g, `Firefox/${v}`);
+          } else if (b === 'Edge') {
+            if (/(Edg|EdgA|EdgiOS|Edge)\/[0-9]+(\.[0-9]+)*/.test(updated)) {
+              updated = updated.replace(/(Edg|EdgA|EdgiOS|Edge)\/[0-9]+(\.[0-9]+)*/g, `$1/${v}`);
             }
-          } else if (b === 'Safari' || updated.includes('Version/')) {
+          } else if (b === 'Firefox') {
+            if (/(Firefox|FxiOS)\/[0-9]+(\.[0-9]+)*/.test(updated)) {
+              updated = updated.replace(/(Firefox|FxiOS)\/[0-9]+(\.[0-9]+)*/g, `$1/${v}`);
+            }
+          } else if (b === 'Safari') {
             if (/Version\/[0-9]+(\.[0-9]+)*/.test(updated)) {
               updated = updated.replace(/Version\/[0-9]+(\.[0-9]+)*/g, `Version/${v}`);
             }
-          } else if (b === 'Edge' || updated.includes('Edg/')) {
-            if (/(Edg|Edge)\/[0-9]+(\.[0-9]+)*/.test(updated)) {
-              updated = updated.replace(/(Edg|Edge)\/[0-9]+(\.[0-9]+)*/g, `Edg/${v}`);
-            }
-          } else if (b === 'Opera' || updated.includes('OPR/')) {
-            if (/(OPR|Opera)\/[0-9]+(\.[0-9]+)*/.test(updated)) {
-              updated = updated.replace(/(OPR|Opera)\/[0-9]+(\.[0-9]+)*/g, `OPR/${v}`);
+          } else if (b === 'Chrome') {
+            if (/(Chrome|CriOS)\/[0-9]+(\.[0-9]+)*/.test(updated)) {
+              updated = updated.replace(/(Chrome|CriOS)\/[0-9]+(\.[0-9]+)*/g, `$1/${v}`);
             }
           }
         }
