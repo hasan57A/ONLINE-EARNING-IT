@@ -1,6 +1,6 @@
 {
   "name": "ONLINE EARNING IT",
-  "description": "Premium online earning and marketing tools platform with lead generation, user agent tools, resources hub, and user portal.",
+  "description": "Premium online earning and marketing tools platform with user agent generator, phone number generator, lead generator, resources hub, and admin control center.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
