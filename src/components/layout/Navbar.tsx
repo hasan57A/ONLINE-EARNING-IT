@@ -52,14 +52,13 @@ export const Navbar: React.FC = () => {
         >
           <img
             src={PLATFORM_LOGO_URL}
-            alt="ONLINE EARNING IT"
-            className="w-9 h-9 rounded-xl object-contain shadow-md group-hover:scale-105 transition-transform"
+            alt="Online Learning Pro"
+            className="w-9 h-9 rounded-xl object-cover ring-1 ring-amber-400/35 shadow-md group-hover:scale-105 transition-transform"
           />
-          <span className="text-base sm:text-lg font-extrabold tracking-tight text-slate-100 whitespace-nowrap shrink-0">
-            ONLINE EARNING{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-fuchsia-400 to-cyan-400">
-              IT
-            </span>
+          <span className="text-base sm:text-lg font-extrabold tracking-tight whitespace-nowrap shrink-0">
+            <span className="text-amber-400 dark:text-amber-300">ONLINE</span>{' '}
+            <span className="text-blue-400 dark:text-sky-300">LEARNING</span>{' '}
+            <span className="text-amber-400 dark:text-amber-300">PRO</span>
           </span>
         </button>
 
@@ -80,7 +79,7 @@ export const Navbar: React.FC = () => {
                 <span>{item.label}</span>
                 {isLocked && <Lock className="w-3 h-3 text-rose-400" />}
                 {isActive && (
-                  <span className="absolute inset-x-0 -bottom-1 h-0.5 rounded-full bg-gradient-to-r from-violet-500 to-cyan-400" />
+                  <span className="absolute inset-x-0 -bottom-1 h-0.5 rounded-full bg-gradient-to-r from-blue-500 via-sky-400 to-amber-400" />
                 )}
               </button>
             );
@@ -89,9 +88,9 @@ export const Navbar: React.FC = () => {
             <button
               type="button"
               onClick={() => handleNavClick('/admin')}
-              className="py-1 text-xs font-semibold text-violet-300 hover:text-slate-100 inline-flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer"
+              className="py-1 text-xs font-semibold text-amber-400 dark:text-amber-300 hover:text-slate-100 inline-flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <Shield className="w-3.5 h-3.5 text-violet-400" />
+              <Shield className="w-3.5 h-3.5 text-amber-400" />
               <span>Admin</span>
             </button>
           )}
@@ -133,7 +132,7 @@ export const Navbar: React.FC = () => {
                 key={item.label}
                 type="button"
                 onClick={() => handleNavClick(item.href)}
-                className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-slate-100 hover:bg-violet-600/15 transition-colors cursor-pointer"
+                className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-slate-100 hover:bg-blue-600/15 transition-colors cursor-pointer"
               >
                 {item.label}
               </button>
@@ -142,7 +141,7 @@ export const Navbar: React.FC = () => {
               <button
                 type="button"
                 onClick={() => handleNavClick('/admin')}
-                className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold text-violet-300 hover:bg-violet-600/15 transition-colors cursor-pointer"
+                className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold text-amber-300 hover:bg-amber-500/15 transition-colors cursor-pointer"
               >
                 Admin Console
               </button>

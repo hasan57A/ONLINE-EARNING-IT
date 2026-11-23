@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import type { ApiAuthResponse } from './authApi';
 import {
   User,
   ToolItem,
@@ -87,20 +88,20 @@ const DEFAULT_WEBSITE_CONTENT: WebsiteContent = {
   heroHighlight: 'Digital Marketers & Media Buyers',
   heroDescription:
     'Power up your CPA campaigns, traffic arbitrage, and data processing with enterprise-grade user agent generators, clean lead test pools, text processors, and curated industry resources.',
-  aboutTitle: 'About ONLINE EARNING IT',
+  aboutTitle: 'About ONLINE LEARNING PRO',
   aboutText:
-    'ONLINE EARNING IT is a premier tools and resources powerhouse engineered specifically for online marketers, traffic arbiters, CPA affiliates, and media buyers. We provide lightning-fast data generation utilities, text normalizers, and vetted marketing knowledge bases to maximize efficiency, scale workflows, and accelerate earnings without operational friction.',
-  contactEmail: 'support@onlineearningit.com',
+    'ONLINE LEARNING PRO is a premier tools and resources powerhouse engineered specifically for online marketers, traffic arbiters, CPA affiliates, and media buyers. We provide lightning-fast data generation utilities, text normalizers, and vetted marketing knowledge bases to maximize efficiency, scale workflows, and accelerate earnings without operational friction.',
+  contactEmail: 'support@onlinelearningpro.com',
   contactPhone: '+1 (555) 019-2834',
-  contactTelegram: '@OnlineEarningIT_Official',
+  contactTelegram: '@OnlineLearningPro_Official',
   socialLinks: {
-    facebook: 'https://facebook.com/OnlineEarningIT',
-    instagram: 'https://instagram.com/OnlineEarningIT',
-    tiktok: 'https://tiktok.com/@OnlineEarningIT',
-    telegram: 'https://t.me/OnlineEarningIT_Channel',
+    facebook: 'https://facebook.com/OnlineLearningPro',
+    instagram: 'https://instagram.com/OnlineLearningPro',
+    tiktok: 'https://tiktok.com/@OnlineLearningPro',
+    telegram: 'https://t.me/OnlineLearningPro_Channel',
   },
   footerDescription:
-    'The premier destination for online earning professionals, CPA marketing toolsets, lead simulation utilities, and marketing intelligence.',
+    'The premier destination for Online Learning Pro professionals, CPA marketing toolsets, lead simulation utilities, and marketing intelligence.',
 };
 
 // Storage keys
@@ -132,7 +133,7 @@ const DEFAULT_SUPPORT_CHANNELS: SupportChannel[] = [
     id: 'ch_tg_1',
     type: 'telegram',
     name: 'Official Support',
-    handleOrNumber: '@OnlineEarningIT_Official',
+    handleOrNumber: '@OnlineLearningPro_Official',
     isPrimary: true,
     status: 'active',
     visibleToUsers: true,
@@ -143,7 +144,7 @@ const DEFAULT_SUPPORT_CHANNELS: SupportChannel[] = [
     id: 'ch_tg_2',
     type: 'telegram',
     name: 'Marketing Support',
-    handleOrNumber: '@OEIT_MarketingDesk',
+    handleOrNumber: '@OLP_MarketingDesk',
     isPrimary: false,
     status: 'active',
     visibleToUsers: true,
@@ -327,11 +328,8 @@ function showBanner(message: string) {
       'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:99999;max-width:90vw;' +
       'background:#b91c1c;color:#fff;padding:10px 16px;border-radius:10px;font:14px sans-serif;' +
       'box-shadow:0 4px 16px rgba(0,0,0,.35)';
-    el.title = 'Click to close';
-    el.style.cursor = 'pointer';
-    el.onclick = () => el.remove();
     document.body.appendChild(el);
-    setTimeout(() => el.remove(), 30000);
+    setTimeout(() => el.remove(), 9000);
   } catch {
     /* ignore */
   }
@@ -845,11 +843,11 @@ class DatabaseService {
     return this.getItem<User[]>(STORAGE_KEYS.USERS, []);
   }
 
-  public async registerUser(fullName: string, mobile: string, gmail: string, pass: string): Promise<{ success: boolean; error?: string; user?: User }> {
+  public async registerUser(fullName: string, mobile: string, gmail: string, pass: string): Promise<{ success: boolean; error?: string; user?: User; requiresVerification?: boolean; cooldownSeconds?: number; expiresInSeconds?: number }> {
     const cleanEmail = gmail.trim().toLowerCase();
 
-    if (!cleanEmail.endsWith('@gmail.com')) {
-      return { success: false, error: 'Registration requires a valid Gmail address (@gmail.com).' };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return { success: false, error: 'Please enter a valid email address.' };
     }
     if (pass.length < 8) {
       return { success: false, error: 'Password must be at least 8 characters.' };
@@ -864,17 +862,25 @@ class DatabaseService {
     if (error) {
       const m = (error.message || '').toLowerCase();
       if (m.includes('already registered') || m.includes('already been registered')) {
-        return { success: false, error: 'This Gmail address is already registered. Please sign in.' };
+        return { success: false, error: 'This email address is already registered. Please sign in.' };
+      }
+      if (m.includes('rate limit') || m.includes('security purposes')) {
+        return { success: false, error: 'Too many attempts. Please wait a minute and try again.' };
       }
       return { success: false, error: error.message || 'Registration failed.' };
     }
-    if (!data.session) {
-      return {
-        success: false,
-        error: 'Account created. Please confirm your email using the link we sent you, then sign in.',
-      };
+
+    // Supabase returns an "empty" user (no identities) if the email is already registered
+    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      return { success: false, error: 'This email address is already registered. Please sign in.' };
     }
 
+    if (!data.session) {
+      // Email confirmation is ON: a 6-digit code has been emailed
+      return { success: true, requiresVerification: true, cooldownSeconds: 60, expiresInSeconds: 3600 };
+    }
+
+    // Email confirmation is OFF: user is logged in right away
     await this.hydrate();
     const user = this.getCurrentUser();
     if (!user) {
@@ -883,15 +889,22 @@ class DatabaseService {
     return { success: true, user };
   }
 
-  public async authenticate(gmail: string, pass: string): Promise<{ success: boolean; error?: string; user?: User }> {
+  public async authenticate(gmail: string, pass: string): Promise<{ success: boolean; error?: string; user?: User; emailNotVerified?: boolean }> {
     const cleanEmail = gmail.trim().toLowerCase();
     const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password: pass });
     if (error) {
       const m = (error.message || '').toLowerCase();
       if (m.includes('not confirmed')) {
-        return { success: false, error: 'Please confirm your email address first, then sign in.' };
+        return {
+          success: false,
+          emailNotVerified: true,
+          error: 'Your email is not verified yet. Please verify your 6-digit code before signing in.',
+        };
       }
-      return { success: false, error: 'Incorrect Gmail or password. Please try again.' };
+      if (m.includes('rate limit') || m.includes('too many')) {
+        return { success: false, error: 'Too many attempts. Please wait a minute and try again.' };
+      }
+      return { success: false, error: 'Incorrect email or password. Please try again.' };
     }
 
     await this.hydrate();
@@ -903,7 +916,87 @@ class DatabaseService {
       }
       return { success: false, error: 'Could not load your profile. Please try again.' };
     }
-    return { success: true, user };
+
+    // remember when they last signed in
+    const users = this.getUsers();
+    const idx = users.findIndex(u => u.id === user.id);
+    if (idx !== -1) {
+      users[idx].lastLoginAt = new Date().toISOString();
+      this.setItem(STORAGE_KEYS.USERS, users);
+    }
+    return { success: true, user: this.getCurrentUser() || user };
+  }
+
+  // ------------------------------------------------------------------
+  // Email OTP (Supabase Auth sends the 6-digit code by email)
+  // ------------------------------------------------------------------
+  private mapOtpError(error: { message?: string; status?: number }): ApiAuthResponse {
+    const m = (error.message || '').toLowerCase();
+    const wait = /after (\d+) seconds?/.exec(m);
+    if (error.status === 429 || m.includes('rate limit') || m.includes('security purposes')) {
+      const secs = wait ? parseInt(wait[1], 10) : 60;
+      return {
+        success: false,
+        code: 'RATE_LIMITED',
+        cooldownSeconds: secs,
+        error: `Please wait ${secs} seconds before requesting another code.`,
+      };
+    }
+    if (m.includes('expired') || m.includes('invalid')) {
+      return { success: false, code: 'INVALID_OTP', error: 'The code is invalid or has expired. Please check it or request a new one.' };
+    }
+    if (m.includes('not found') || m.includes('user')) {
+      return { success: false, code: 'USER_NOT_FOUND', error: 'No account found with this email.' };
+    }
+    return { success: false, error: error.message || 'Something went wrong. Please try again.' };
+  }
+
+  public async verifySignupOtp(email: string, token: string): Promise<ApiAuthResponse> {
+    const cleanEmail = email.trim().toLowerCase();
+    const first = await supabase.auth.verifyOtp({ email: cleanEmail, token: token.trim(), type: 'signup' });
+    if (first.error) {
+      // some projects label the confirmation code as a plain "email" code
+      const second = await supabase.auth.verifyOtp({ email: cleanEmail, token: token.trim(), type: 'email' });
+      if (second.error) return this.mapOtpError(first.error);
+    }
+    await this.hydrate();
+    return { success: true, verified: true };
+  }
+
+  public async resendSignupOtp(email: string): Promise<ApiAuthResponse> {
+    const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim().toLowerCase() });
+    if (error) return this.mapOtpError(error);
+    return { success: true, cooldownSeconds: 60, expiresInSeconds: 3600 };
+  }
+
+  public async requestPasswordResetOtp(email: string): Promise<ApiAuthResponse> {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
+    if (error) return this.mapOtpError(error);
+    return { success: true, cooldownSeconds: 60, expiresInSeconds: 3600 };
+  }
+
+  public async verifyRecoveryOtp(email: string, token: string): Promise<ApiAuthResponse> {
+    const { error } = await supabase.auth.verifyOtp({ email: email.trim().toLowerCase(), token: token.trim(), type: 'recovery' });
+    if (error) return this.mapOtpError(error);
+    return { success: true, verified: true, resetToken: 'verified' };
+  }
+
+  public async setPasswordAfterRecovery(newPassword: string): Promise<ApiAuthResponse> {
+    if (newPassword.length < 8) {
+      return { success: false, error: 'Password must be at least 8 characters.' };
+    }
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      const m = (error.message || '').toLowerCase();
+      if (m.includes('same') || m.includes('different')) {
+        return { success: false, error: 'The new password must be different from your old password.' };
+      }
+      return { success: false, error: error.message || 'Could not reset password.' };
+    }
+    // they must sign in again with the new password
+    await supabase.auth.signOut();
+    await this.hydrate();
+    return { success: true };
   }
 
   public getCurrentUser(): User | null {
@@ -1175,40 +1268,11 @@ class DatabaseService {
       users[idx].credits = nextCredits;
       users[idx].usedCredits = nextUsedCredits;
       users[idx].updatedAt = nowIso;
-      // Credits are saved on the server by deduct_credits() below, so the normal
-      // profile sync must not try to send this change a second time.
-      const usersSynced = this.synced[STORAGE_KEYS.USERS] || (this.synced[STORAGE_KEYS.USERS] = new Map());
-      usersSynced.set(String(users[idx].id), JSON.stringify(users[idx]));
       this.setItem(STORAGE_KEYS.USERS, users);
     }
     if (current && current.id === userId) {
       this.setCurrentUser({ ...current, credits: nextCredits, usedCredits: nextUsedCredits, updatedAt: nowIso });
     }
-
-    // Save the deduction in the database (atomic, runs on the server)
-    this.enqueue(async () => {
-      const { data, error } = await supabase.rpc('deduct_credits', { amount: cleanAmount });
-      if (!error) {
-        if (data === null || data === undefined) {
-          throw new Error('Credits could not be deducted in the database (no active package).');
-        }
-        return;
-      }
-      // Fallback: the database function is missing or failed, so save the new balance directly
-      console.error('deduct_credits failed, saving the balance directly:', error);
-      const { data: sess } = await supabase.auth.getSession();
-      const uid = sess.session?.user.id;
-      if (!uid) throw error;
-      const { data: updated, error: updErr } = await supabase
-        .from('profiles')
-        .update({ credits: nextCredits, used_credits: nextUsedCredits })
-        .eq('id', uid)
-        .select('credits');
-      if (updErr) throw new Error(`${error.message} / ${updErr.message}`);
-      if (!updated || updated.length === 0) {
-        throw new Error(`${error.message} / no profile row was updated`);
-      }
-    });
 
     return { success: true, remainingCredits: nextCredits };
   }

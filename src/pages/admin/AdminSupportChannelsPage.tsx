@@ -515,7 +515,7 @@ export const AdminSupportChannelsPage: React.FC = () => {
                 type="text"
                 value={chHandle}
                 onChange={e => setChHandle(e.target.value)}
-                placeholder={chType === 'telegram' ? '@OnlineEarningIT_Official' : '+880 1712-345678'}
+                placeholder={chType === 'telegram' ? '@OnlineLearningPro_Official' : '+880 1712-345678'}
                 className="w-full px-3.5 py-2.5 rounded-xl border text-xs text-slate-100 font-mono"
               />
             </div>

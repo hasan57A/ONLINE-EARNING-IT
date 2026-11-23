@@ -17,12 +17,12 @@ export interface User {
   credits?: number;
   usedCredits?: number;
   planUpdatedAt?: string;
-  emailVerified?: boolean;
   telegramVerified?: boolean;
   phoneVerified?: boolean;
   twoFactorEnabled?: boolean;
   adminNote?: string;
   lastLoginAt?: string;
+  emailVerified?: boolean;
   createdAt: string;
   updatedAt?: string;
 }

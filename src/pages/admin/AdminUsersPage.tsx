@@ -150,7 +150,7 @@ export const AdminUsersPage: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `online_earning_it_users_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `online_learning_pro_users_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     playUiSound('copy');

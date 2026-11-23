@@ -13,7 +13,7 @@ export const Footer: React.FC = () => {
 
   return (
     <footer className="relative w-full border-t border-slate-800/80 bg-slate-900/90 text-slate-400 text-xs mt-16">
-      <div className="absolute inset-x-[10%] top-0 h-px bg-gradient-to-r from-transparent via-violet-500/70 to-transparent" />
+      <div className="absolute inset-x-[8%] top-0 h-px bg-gradient-to-r from-transparent via-amber-400/75 to-transparent" />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10">
           {/* Brand & Description */}
@@ -21,19 +21,27 @@ export const Footer: React.FC = () => {
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="flex items-center gap-2.5 cursor-pointer select-none text-left"
+              className="flex items-center gap-3 cursor-pointer select-none text-left"
             >
               <img
                 src={PLATFORM_LOGO_URL}
-                alt="ONLINE EARNING IT"
-                className="w-10 h-10 rounded-xl object-contain shadow-md"
+                alt="Online Learning Pro"
+                className="w-11 h-11 rounded-xl object-cover ring-1 ring-amber-400/40 shadow-md"
               />
-              <span className="text-base font-extrabold text-slate-100 tracking-tight">
-                ONLINE EARNING{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-400">
-                  IT
+              <div>
+                <span className="text-base font-extrabold tracking-tight block">
+                  <span className="text-amber-400 dark:text-amber-300">ONLINE</span>{' '}
+                  <span className="text-blue-400 dark:text-sky-300">LEARNING</span>{' '}
+                  <span className="text-amber-400 dark:text-amber-300">PRO</span>
                 </span>
-              </span>
+                <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-[0.2em] text-slate-400 uppercase mt-0.5">
+                  <span>LEARN</span>
+                  <span className="text-blue-400">•</span>
+                  <span>GROW</span>
+                  <span className="text-blue-400">•</span>
+                  <span>ACHIEVE</span>
+                </span>
+              </div>
             </button>
             <p className="text-slate-400 text-xs leading-relaxed max-w-sm">
               {content.footerDescription}
@@ -98,7 +106,7 @@ export const Footer: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => navigate(`/tools/${t.slug}`)}
-                    className="hover:text-violet-300 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    className="hover:text-amber-400 dark:hover:text-amber-300 transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
                     <span>{t.name}</span>
                   </button>
@@ -112,22 +120,22 @@ export const Footer: React.FC = () => {
             <h4 className="text-xs font-bold text-slate-100">Workspace</h4>
             <ul className="space-y-2">
               <li>
-                <button type="button" onClick={() => navigate('/dashboard')} className="hover:text-violet-300 transition-colors cursor-pointer">
+                <button type="button" onClick={() => navigate('/dashboard')} className="hover:text-amber-400 dark:hover:text-amber-300 transition-colors cursor-pointer">
                   Dashboard
                 </button>
               </li>
               <li>
-                <button type="button" onClick={() => navigate('/payment')} className="hover:text-violet-300 transition-colors cursor-pointer">
+                <button type="button" onClick={() => navigate('/payment')} className="hover:text-amber-400 dark:hover:text-amber-300 transition-colors cursor-pointer">
                   Plans & Credits
                 </button>
               </li>
               <li>
-                <button type="button" onClick={() => navigate('/resources')} className="hover:text-violet-300 transition-colors cursor-pointer">
+                <button type="button" onClick={() => navigate('/resources')} className="hover:text-amber-400 dark:hover:text-amber-300 transition-colors cursor-pointer">
                   Resources Hub
                 </button>
               </li>
               <li>
-                <button type="button" onClick={() => navigate('/support')} className="hover:text-violet-300 transition-colors cursor-pointer">
+                <button type="button" onClick={() => navigate('/support')} className="hover:text-amber-400 dark:hover:text-amber-300 transition-colors cursor-pointer">
                   Support Center
                 </button>
               </li>
@@ -136,7 +144,7 @@ export const Footer: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => navigate('/admin')}
-                    className="text-violet-300 hover:text-violet-200 font-semibold flex items-center gap-1 cursor-pointer"
+                    className="text-amber-400 dark:text-amber-300 hover:text-amber-200 font-semibold flex items-center gap-1 cursor-pointer"
                   >
                     <ShieldCheck className="w-3.5 h-3.5" />
                     <span>Admin Panel</span>
@@ -151,7 +159,7 @@ export const Footer: React.FC = () => {
             <h4 className="text-xs font-bold text-slate-100">Direct Contact</h4>
             <ul className="space-y-2.5 text-slate-400">
               <li className="flex items-center gap-2">
-                <Mail className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                <Mail className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span className="truncate">{content.contactEmail}</span>
               </li>
               <li className="flex items-center gap-2">
@@ -166,7 +174,7 @@ export const Footer: React.FC = () => {
             <button
               type="button"
               onClick={() => navigate('/support')}
-              className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-violet-300 hover:text-slate-100 cursor-pointer"
+              className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-400 dark:text-sky-300 hover:text-amber-300 cursor-pointer"
             >
               <span>Open Support Desk</span>
               <ArrowUpRight className="w-3.5 h-3.5" />
@@ -175,7 +183,7 @@ export const Footer: React.FC = () => {
         </div>
 
         <div className="mt-10 pt-6 border-t border-slate-800/70 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
-          <p>© {new Date().getFullYear()} ONLINE EARNING IT. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} ONLINE LEARNING PRO. All rights reserved.</p>
           <div className="flex items-center gap-4">
             <p className="hidden md:block">Built for performance marketers, media buyers, and QA engineers.</p>
             <ThemeSwitcher />

@@ -12,6 +12,8 @@ const APP_ROUTE_PREFIXES = [
   '/',
   '/signin',
   '/signup',
+  '/verify-email',
+  '/forgot-password',
   '/dashboard',
   '/tools',
   '/resources',
@@ -131,5 +133,5 @@ export function resolvePublicAsset(relPath: string): string {
 }
 
 export const PLATFORM_LOGO_URL = resolvePublicAsset(
-  'assets/aistudio/Online_Earning_IT_Logo__e2215d9f_e2215d9f.png'
+  'assets/aistudio/photo_2026-11-23_12-53-09_1226b515.jpg'
 );

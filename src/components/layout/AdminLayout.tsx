@@ -162,7 +162,7 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
           <div className={`h-16 px-4 border-b border-slate-800/80 flex items-center ${isCompactSidebar ? 'lg:justify-center lg:px-2' : 'justify-between'} shrink-0`}>
             <button
               type="button"
-              title="Online Earning IT Admin"
+              title="Online Learning Pro Admin"
               onClick={() => {
                 playUiSound('click');
                 navigate('/admin');
@@ -171,14 +171,16 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
             >
               <img
                 src={PLATFORM_LOGO_URL}
-                alt="Online Earning IT"
-                className="w-8 h-8 rounded-xl object-contain shadow-md shrink-0"
+                alt="Online Learning Pro"
+                className="w-9 h-9 rounded-xl object-cover ring-1 ring-amber-400/40 shadow-md shrink-0"
               />
               <div className={isCompactSidebar ? 'lg:hidden' : ''}>
-                <span className="text-sm font-extrabold tracking-tight text-slate-100 block leading-tight">
-                  Online Earning IT
+                <span className="text-sm font-extrabold tracking-tight block leading-tight">
+                  <span className="text-amber-400 dark:text-amber-300">ONLINE</span>{' '}
+                  <span className="text-blue-400 dark:text-sky-300">LEARNING</span>{' '}
+                  <span className="text-amber-400 dark:text-amber-300">PRO</span>
                 </span>
-                <span className="text-[10px] text-violet-400 font-semibold block leading-none">
+                <span className="text-[10px] text-amber-400 font-semibold block leading-none mt-0.5">
                   Admin Panel
                 </span>
               </div>
@@ -216,7 +218,7 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
                         isCompactSidebar ? 'lg:justify-center lg:px-2' : ''
                       } ${
                         isActive
-                          ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-600/30'
+                          ? 'bg-gradient-to-r from-blue-600 via-sky-500 to-amber-500 text-white shadow-lg shadow-blue-600/25'
                           : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-100'
                       }`}
                     >
@@ -229,7 +231,7 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
                           className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold tabular-nums ${
                             isCompactSidebar ? 'lg:hidden' : ''
                           } ${
-                            isActive ? 'bg-white/20 text-white' : 'bg-violet-600/20 text-violet-300'
+                            isActive ? 'bg-white/20 text-white' : 'bg-amber-500/20 text-amber-300'
                           }`}
                         >
                           {item.badge}
@@ -246,7 +248,7 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
 
           {/* Bottom User Dashboard & Admin Account */}
           <div className={`p-3 border-t border-slate-800/80 space-y-2.5 shrink-0 ${isCompactSidebar ? 'lg:px-2' : ''}`}>
-            <div className={`p-3.5 rounded-2xl border border-violet-500/25 bg-violet-500/10 dark:bg-gradient-to-br dark:from-violet-950/60 dark:via-slate-900 dark:to-indigo-950/50 space-y-2 ${isCompactSidebar ? 'lg:p-2' : ''}`}>
+            <div className={`p-3.5 rounded-2xl border border-amber-400/30 bg-amber-500/10 dark:bg-gradient-to-br dark:from-blue-950/60 dark:via-slate-900 dark:to-amber-950/30 space-y-2 ${isCompactSidebar ? 'lg:p-2' : ''}`}>
               <p className={`text-xs font-bold text-slate-100 ${isCompactSidebar ? 'lg:hidden' : ''}`}>User Workspace</p>
               <p className={`text-[11px] text-slate-400 ${isCompactSidebar ? 'lg:hidden' : ''}`}>Preview tools & user flows live.</p>
               <button

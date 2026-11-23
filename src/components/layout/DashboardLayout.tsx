@@ -230,20 +230,22 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                 playUiSound('click');
                 navigate('/dashboard');
               }}
-              title="Online Earning IT"
+              title="Online Learning Pro"
               className="flex items-center gap-2.5 cursor-pointer text-left"
             >
               <img
                 src={PLATFORM_LOGO_URL}
-                alt="Online Earning IT"
-                className="w-8 h-8 rounded-xl object-contain shadow-md shrink-0"
+                alt="Online Learning Pro"
+                className="w-9 h-9 rounded-xl object-cover ring-1 ring-amber-400/40 shadow-md shrink-0"
               />
               <div className={isCompactSidebar ? 'lg:hidden' : ''}>
-                <span className="text-sm font-extrabold tracking-tight text-slate-100 block leading-tight">
-                  Online Earning IT
+                <span className="text-sm font-extrabold tracking-tight block leading-tight">
+                  <span className="text-amber-400 dark:text-amber-300">ONLINE</span>{' '}
+                  <span className="text-blue-400 dark:text-sky-300">LEARNING</span>{' '}
+                  <span className="text-amber-400 dark:text-amber-300">PRO</span>
                 </span>
-                <span className="text-[10px] text-slate-400 block leading-none">
-                  Creator Workspace
+                <span className="text-[10px] text-slate-400 tracking-wider block leading-none mt-0.5">
+                  LEARN • GROW • ACHIEVE
                 </span>
               </div>
             </button>
@@ -271,7 +273,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                   isCompactSidebar ? 'lg:justify-center lg:px-2' : ''
                 } ${
                   path === '/dashboard'
-                    ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-600/30'
+                    ? 'bg-gradient-to-r from-blue-600 via-sky-500 to-amber-500 text-white shadow-lg shadow-blue-600/25'
                     : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
                 }`}
               >
@@ -296,7 +298,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                     isCompactSidebar ? 'lg:justify-center lg:px-2' : ''
                   } ${
                     path.startsWith('/tools')
-                      ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-600/30'
+                      ? 'bg-gradient-to-r from-blue-600 via-sky-500 to-amber-500 text-white shadow-lg shadow-blue-600/25'
                       : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
                   }`}
                 >
@@ -367,7 +369,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                     isCompactSidebar ? 'lg:justify-center lg:px-2' : ''
                   } ${
                     path.startsWith('/resources')
-                      ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-600/30'
+                      ? 'bg-gradient-to-r from-blue-600 via-sky-500 to-amber-500 text-white shadow-lg shadow-blue-600/25'
                       : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
                   }`}
                 >
@@ -433,7 +435,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       isCompactSidebar ? 'lg:justify-center lg:px-2' : ''
                     } ${
                       active
-                        ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-600/30'
+                        ? 'bg-gradient-to-r from-blue-600 via-sky-500 to-amber-500 text-white shadow-lg shadow-blue-600/25'
                         : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
                     }`}
                   >
@@ -466,7 +468,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                       isCompactSidebar ? 'lg:justify-center lg:px-2' : ''
                     } ${
                       active
-                        ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-600/30'
+                        ? 'bg-gradient-to-r from-blue-600 via-sky-500 to-amber-500 text-white shadow-lg shadow-blue-600/25'
                         : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
                     }`}
                   >
@@ -497,7 +499,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
 
           {/* Bottom Upgrade Card & User Mini Strip */}
           <div className={`p-3 border-t border-slate-800/80 space-y-2.5 shrink-0 ${isCompactSidebar ? 'lg:px-2' : ''}`}>
-            <div className={`p-3.5 rounded-2xl border border-violet-500/30 bg-violet-500/10 dark:bg-gradient-to-br dark:from-violet-950/70 dark:via-slate-900 dark:to-indigo-950/60 text-center space-y-2.5 ${isCompactSidebar ? 'lg:p-2' : ''}`}>
+            <div className={`p-3.5 rounded-2xl border border-amber-400/35 bg-amber-500/10 dark:bg-gradient-to-br dark:from-blue-950/70 dark:via-slate-900 dark:to-amber-950/35 text-center space-y-2.5 ${isCompactSidebar ? 'lg:p-2' : ''}`}>
               <button
                 type="button"
                 title={toolAccess.hasUsablePackage ? 'Add Credits' : 'Upgrade to Premium'}
@@ -506,7 +508,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
                   navigate('/payment');
                   setSidebarOpen(false);
                 }}
-                className="w-9 h-9 mx-auto rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-zinc-950 flex items-center justify-center shadow-lg shadow-amber-500/20 cursor-pointer"
+                className="w-9 h-9 mx-auto rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-amber-600 text-zinc-950 flex items-center justify-center shadow-lg shadow-amber-500/25 cursor-pointer"
               >
                 <Crown className="w-4 h-4" />
               </button>
@@ -542,7 +544,7 @@ export const DashboardLayout: React.FC<{ children: React.ReactNode }> = ({ child
 
             <div className={`flex items-center justify-between px-2 py-1.5 rounded-xl bg-slate-900/70 border border-slate-800/80 ${isCompactSidebar ? 'lg:flex-col lg:gap-1.5 lg:px-1' : ''}`}>
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-violet-600 to-cyan-500 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-amber-500 text-white text-xs font-bold flex items-center justify-center shrink-0">
                   {userInitial}
                 </div>
                 <div className={`min-w-0 ${isCompactSidebar ? 'lg:hidden' : ''}`}>

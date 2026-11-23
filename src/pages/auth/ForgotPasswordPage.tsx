@@ -194,7 +194,7 @@ export const ForgotPasswordPage: React.FC = () => {
             >
               <img
                 src={PLATFORM_LOGO_URL}
-                alt="ONLINE EARNING IT"
+                alt="ONLINE LEARNING PRO"
                 className="w-10 h-10 rounded-xl object-contain"
               />
             </div>
@@ -430,7 +430,7 @@ export const ForgotPasswordPage: React.FC = () => {
       {/* Bottom disclaimer */}
       <div className="text-center text-[11px] text-slate-500 max-w-md mx-auto flex items-center justify-center gap-1.5 relative z-10">
         <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-        <span>ONLINE EARNING IT · Rate-Limited Password Recovery</span>
+        <span>ONLINE LEARNING PRO · Rate-Limited Password Recovery</span>
       </div>
     </div>
   );

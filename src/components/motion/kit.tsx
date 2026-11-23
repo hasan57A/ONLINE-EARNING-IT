@@ -22,7 +22,7 @@ export const ScrollProgress: React.FC = () => {
     <motion.div
       aria-hidden="true"
       style={{ scaleX, transformOrigin: '0% 50%' }}
-      className="fixed top-0 left-0 right-0 h-[3px] z-[70] bg-gradient-to-r from-blue-500 via-indigo-400 to-cyan-300 shadow-[0_0_18px_var(--color-blue-500)]"
+      className="fixed top-0 left-0 right-0 h-[3px] z-[70] bg-gradient-to-r from-blue-600 via-sky-400 to-amber-400 shadow-[0_0_18px_var(--color-blue-500)]"
     />
   );
 };

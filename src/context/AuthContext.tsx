@@ -1,14 +1,28 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from '../types';
 import { db } from '../services/db';
+import type { ApiAuthResponse, OtpPurpose } from '../services/authApi';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
   loading: boolean;
-  signIn: (gmail: string, pass: string) => Promise<{ success: boolean; user?: User; error?: string }>;
-  signUp: (fullName: string, mobile: string, gmail: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  signIn: (
+    gmail: string,
+    pass: string
+  ) => Promise<{ success: boolean; user?: User; emailNotVerified?: boolean; error?: string }>;
+  signUp: (fullName: string, mobile: string, gmail: string, pass: string) => Promise<ApiAuthResponse>;
+  verifyEmailOtp: (email: string, otp: string) => Promise<ApiAuthResponse>;
+  resendOtp: (email: string, purpose: OtpPurpose) => Promise<ApiAuthResponse>;
+  requestPasswordReset: (email: string) => Promise<ApiAuthResponse>;
+  verifyResetOtp: (email: string, otp: string) => Promise<ApiAuthResponse>;
+  resetPassword: (
+    email: string,
+    resetToken: string,
+    newPassword: string,
+    confirmPassword: string
+  ) => Promise<ApiAuthResponse>;
   signOut: () => void;
   updateProfile: (data: {
     fullName?: string;
@@ -48,7 +62,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(res.user);
         return { success: true, user: res.user };
       }
-      return { success: false, error: res.error || 'Authentication failed' };
+      return {
+        success: false,
+        emailNotVerified: res.emailNotVerified,
+        error: res.error || 'Authentication failed',
+      };
     } catch {
       return { success: false, error: 'An unexpected error occurred during sign in.' };
     } finally {
@@ -56,18 +74,89 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signUp = async (fullName: string, mobile: string, gmail: string, pass: string) => {
+  const signUp = async (fullName: string, mobile: string, gmail: string, pass: string): Promise<ApiAuthResponse> => {
     setLoading(true);
     try {
       const res = await db.registerUser(fullName, mobile, gmail, pass);
       if (res.success && res.user) {
-        db.setCurrentUser(res.user);
+        // confirmation is switched off: the user is already signed in
         setUser(res.user);
-        return { success: true };
+        return { success: true, verified: true };
+      }
+      if (res.success) {
+        return {
+          success: true,
+          requiresVerification: true,
+          cooldownSeconds: res.cooldownSeconds ?? 60,
+          expiresInSeconds: res.expiresInSeconds ?? 3600,
+        };
       }
       return { success: false, error: res.error || 'Registration failed' };
     } catch {
       return { success: false, error: 'An unexpected error occurred during registration.' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyEmailOtp = async (email: string, otp: string): Promise<ApiAuthResponse> => {
+    setLoading(true);
+    try {
+      const res = await db.verifySignupOtp(email, otp);
+      if (res.success) {
+        // sign in screen asks for the password again, so end the temporary session
+        db.setCurrentUser(null);
+        setUser(null);
+      }
+      return res;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resendOtp = async (email: string, purpose: OtpPurpose): Promise<ApiAuthResponse> => {
+    setLoading(true);
+    try {
+      return purpose === 'password_reset'
+        ? await db.requestPasswordResetOtp(email)
+        : await db.resendSignupOtp(email);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const requestPasswordReset = async (email: string): Promise<ApiAuthResponse> => {
+    setLoading(true);
+    try {
+      return await db.requestPasswordResetOtp(email);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyResetOtp = async (email: string, otp: string): Promise<ApiAuthResponse> => {
+    setLoading(true);
+    try {
+      return await db.verifyRecoveryOtp(email, otp);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetPassword = async (
+    _email: string,
+    _resetToken: string,
+    newPassword: string,
+    confirmPassword: string
+  ): Promise<ApiAuthResponse> => {
+    if (newPassword !== confirmPassword) {
+      return { success: false, error: 'Password and Confirm Password do not match.' };
+    }
+    setLoading(true);
+    try {
+      const res = await db.setPasswordAfterRecovery(newPassword);
+      if (res.success) setUser(null);
+      return res;
     } finally {
       setLoading(false);
     }
@@ -106,6 +195,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         signIn,
         signUp,
+        verifyEmailOtp,
+        resendOtp,
+        requestPasswordReset,
+        verifyResetOtp,
+        resetPassword,
         signOut,
         updateProfile,
         refreshUser,

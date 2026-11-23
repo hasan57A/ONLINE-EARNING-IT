@@ -23,11 +23,11 @@ export interface ThemeMeta {
 export const PREMIUM_THEMES: ThemeMeta[] = [
   {
     id: 'midnight',
-    name: 'Aurora Noir',
-    subtitle: 'Ink Violet · Iris Glow',
-    swatchPrimary: '#7c3aed',
-    swatchBg: '#070913',
-    badgeText: 'text-violet-400',
+    name: 'Sapphire & Gold',
+    subtitle: 'Midnight Navy · 24K Gold',
+    swatchPrimary: '#2563eb',
+    swatchBg: '#040814',
+    badgeText: 'text-blue-400',
   },
   {
     id: 'obsidian',

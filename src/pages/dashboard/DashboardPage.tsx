@@ -116,19 +116,16 @@ export const DashboardPage: React.FC = () => {
         transition={{ duration: 0.5 }}
         className="oe-panel oe-rgb-violet p-6 sm:p-10 rounded-3xl relative overflow-hidden grid grid-cols-1 lg:grid-cols-[1.25fr_1fr] gap-8 items-center"
       >
-        <div className="absolute -right-10 -top-24 w-[28rem] h-[28rem] bg-violet-600/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -left-24 -bottom-32 w-96 h-96 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -right-10 -top-24 w-[28rem] h-[28rem] bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-24 -bottom-32 w-96 h-96 bg-amber-500/12 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 space-y-4 max-w-2xl">
-          <div className="inline-flex items-center gap-2 text-xs font-bold text-violet-300 bg-violet-500/15 border border-violet-500/30 px-3.5 py-1 rounded-full backdrop-blur-md">
-            <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-            </span>
-            <span>Authenticated Workspace · Session Active</span>
+          <div className="flex items-center gap-2.5 text-xs font-bold text-amber-400 dark:text-amber-300">
+            <span className="oe-gold-spear-left w-7" />
+            <span className="tracking-wider uppercase">ONLINE LEARNING PRO · LEARN • GROW • ACHIEVE</span>
           </div>
           <h1 className="text-3xl sm:text-5xl font-black text-slate-100 tracking-tight leading-[1.1]">
             {greeting},{' '}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-300 via-fuchsia-300 to-cyan-200">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-blue-400 to-sky-300">
               {firstName}
             </span>{' '}
             <Sparkles className="w-6 h-6 text-amber-300 hidden sm:inline -translate-y-1" />
@@ -350,7 +347,7 @@ export const DashboardPage: React.FC = () => {
                       transition={{ duration: 0.6, delay: idx * 0.08, ease: 'easeOut' }}
                       className={`w-full rounded-lg transition-colors ${
                         d.count > 0
-                          ? 'bg-gradient-to-t from-violet-600 via-indigo-500 to-cyan-400'
+                          ? 'bg-gradient-to-t from-blue-600 via-sky-500 to-amber-400'
                           : 'bg-slate-800'
                       }`}
                     />
@@ -472,16 +469,16 @@ export const DashboardPage: React.FC = () => {
                 <div className="relative flex items-start justify-between">
                   <RealisticToolIcon slug={tool.slug} size="lg" />
                   {isFree ? (
-                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold uppercase">
+                    <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold uppercase">
                       100% FREE
                     </span>
                   ) : open ? (
-                    <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3 h-3" />
                       <span>Ready</span>
                     </span>
                   ) : (
-                    <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                    <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
                       <Lock className="w-3 h-3" />
                       <span>Package</span>
                     </span>

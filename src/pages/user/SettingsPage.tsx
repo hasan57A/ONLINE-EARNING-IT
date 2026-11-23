@@ -143,7 +143,7 @@ export const SettingsPage: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `online-earning-it-data-${Date.now()}.json`;
+    a.download = `online-learning-pro-data-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
     playUiSound('copy');

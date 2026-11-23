@@ -64,13 +64,13 @@ export const ThemeSwitcher: React.FC = () => {
         aria-expanded={open}
         aria-label={`Color Mode: ${activeMeta.name} (${displayMode})`}
         title={`Color Mode: ${activeMeta.name} — Click to customize theme & light/dark mode`}
-        className="group relative p-2 sm:px-2.5 sm:py-2 rounded-xl border border-slate-700/80 bg-slate-900/90 hover:bg-slate-800 hover:border-violet-500/50 text-slate-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap shrink-0"
+        className="group relative p-2 sm:px-2.5 sm:py-2 rounded-xl border border-slate-700/80 bg-slate-900/90 hover:bg-slate-800 hover:border-amber-400/50 text-slate-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap shrink-0"
       >
         <span
           className="w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-slate-700/50 transition-transform group-hover:scale-110"
           style={{ backgroundColor: activeMeta.swatchPrimary }}
         />
-        <ActiveIcon className="w-4 h-4 text-violet-400 transition-transform group-hover:rotate-12 shrink-0" />
+        <ActiveIcon className="w-4 h-4 text-amber-400 transition-transform group-hover:rotate-12 shrink-0" />
         <span className="hidden lg:inline text-[11px] font-bold text-slate-100 whitespace-nowrap">
           {activeMeta.name.split(' ')[0]}
         </span>
@@ -99,7 +99,7 @@ export const ThemeSwitcher: React.FC = () => {
                     onClick={() => handleSelectDisplayMode(item.id)}
                     className={`flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                       active
-                        ? 'bg-violet-600 text-white shadow-sm'
+                        ? 'bg-blue-600 text-white shadow-sm'
                         : 'text-slate-400 hover:text-slate-100'
                     }`}
                   >
@@ -127,7 +127,7 @@ export const ThemeSwitcher: React.FC = () => {
                     onClick={() => handleSelectTheme(item.id, item.name)}
                     className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl text-left transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-violet-600/20 border border-violet-500/40 text-slate-100'
+                        ? 'bg-blue-600/20 border border-amber-400/40 text-slate-100'
                         : 'border border-transparent hover:bg-slate-800/70 text-slate-300'
                     }`}
                   >
@@ -144,7 +144,7 @@ export const ThemeSwitcher: React.FC = () => {
                         <div className="text-[10px] text-slate-400 truncate">{item.subtitle}</div>
                       </div>
                     </div>
-                    {isSelected && <Check className="w-3.5 h-3.5 text-violet-400 shrink-0" />}
+                    {isSelected && <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
                   </button>
                 );
               })}

@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useScroll, useSpring, useTransform } from 'mot
 import { ArrowUp } from 'lucide-react';
 import { RealisticToolIcon } from '../ui/RealisticIcon';
 
-const LOGO = '/assets/aistudio/Online_Earning_IT_Logo__e2215d9f_e2215d9f.png';
+const LOGO = '/assets/aistudio/photo_2026-11-23_12-53-09_1226b515.jpg';
 const EASE = [0.16, 1, 0.3, 1] as const;
 
 /** Cinematic first-visit intro: logo ignites, wordmark rises, screen wipes open. */
@@ -36,29 +36,45 @@ export const IntroSplash: React.FC = () => {
           initial={{ clipPath: 'circle(150% at 50% 50%)' }}
           exit={{ clipPath: 'circle(0% at 50% 50%)', transition: { duration: 0.9, ease: EASE } }}
         >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,color-mix(in_srgb,var(--color-blue-600)_35%,transparent),transparent_60%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,rgba(37,99,235,0.28),transparent_58%)]" />
           <motion.div
-            className="relative w-24 h-24"
+            className="relative w-28 h-28"
             initial={{ scale: 0.4, opacity: 0, rotate: -20 }}
             animate={{ scale: 1, opacity: 1, rotate: 0 }}
             transition={{ duration: 1, ease: EASE }}
           >
             <div className="oe-splash-ring" />
-            <img src={LOGO} alt="" className="relative w-full h-full object-contain rounded-2xl" />
+            <img src={LOGO} alt="Online Learning Pro" className="relative w-full h-full object-cover rounded-2xl border border-amber-400/30 shadow-2xl" />
           </motion.div>
-          <div className="relative mt-7 overflow-hidden">
+          <div className="relative mt-7 overflow-hidden text-center">
             <motion.p
-              className="text-slate-100 font-black tracking-[0.32em] text-sm sm:text-base uppercase"
+              className="font-display font-black tracking-[0.24em] text-sm sm:text-base uppercase"
               initial={{ y: '110%', opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.9, delay: 0.35, ease: EASE }}
+              transition={{ duration: 0.9, delay: 0.3, ease: EASE }}
             >
-              Online Earning IT
+              <span className="oe-text-gold">ONLINE</span>{' '}
+              <span className="oe-text-sapphire">LEARNING</span>{' '}
+              <span className="oe-text-gold">PRO</span>
             </motion.p>
-          </div>
-          <div className="relative mt-6 h-[2px] w-40 rounded-full bg-slate-800 overflow-hidden">
             <motion.div
-              className="h-full bg-gradient-to-r from-violet-400 via-indigo-400 to-cyan-300"
+              className="mt-2 flex items-center justify-center gap-2.5 text-[10px] font-bold tracking-[0.28em] text-slate-300 uppercase"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.7, delay: 0.5 }}
+            >
+              <span className="oe-gold-spear-left w-8" />
+              <span>LEARN</span>
+              <span className="text-blue-400">•</span>
+              <span>GROW</span>
+              <span className="text-blue-400">•</span>
+              <span>ACHIEVE</span>
+              <span className="oe-gold-spear-right w-8" />
+            </motion.div>
+          </div>
+          <div className="relative mt-6 h-[2px] w-44 rounded-full bg-slate-800 overflow-hidden">
+            <motion.div
+              className="h-full bg-gradient-to-r from-blue-600 via-sky-400 to-amber-400"
               initial={{ width: '0%' }}
               animate={{ width: '100%' }}
               transition={{ duration: 1.5, ease: 'easeInOut' }}
@@ -128,12 +144,55 @@ const ORBIT: Array<{ slug: string; pos: string; size: 'md' | 'lg'; dur: number; 
   { slug: 'number-generator', pos: '-right-10 -bottom-4', size: 'md', dur: 8.5, amp: 11, delay: 1.5 },
 ];
 
-/** Real 3D tool icons floating around the hero studio card (desktop only) */
+const LOGO_PIXELS = [
+  { pos: '-left-8 top-12 w-3.5 h-3.5', tone: 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.75)]', dur: 4.5 },
+  { pos: '-left-14 top-24 w-2.5 h-2.5', tone: 'bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.75)]', dur: 5.2 },
+  { pos: '-left-5 top-36 w-2 h-2', tone: 'bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.75)]', dur: 3.9 },
+  { pos: '-right-7 bottom-24 w-3.5 h-3.5', tone: 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.75)]', dur: 4.8 },
+  { pos: '-right-12 bottom-36 w-2.5 h-2.5', tone: 'bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.75)]', dur: 5.6 },
+];
+
+/** Real 3D tool icons, golden orbital arc, & digital pixels floating around hero card */
 export const HeroOrbit: React.FC = () => {
   const { scrollY } = useScroll();
   const shift = useTransform(scrollY, [0, 700], [0, -70]);
   return (
     <motion.div style={{ y: shift }} className="absolute inset-0 pointer-events-none hidden xl:block" aria-hidden="true">
+      {/* Tilted Golden Orbital Ring behind showcase */}
+      <svg
+        viewBox="0 0 560 560"
+        className="absolute -inset-12 w-[calc(100%+6rem)] h-[calc(100%+6rem)] opacity-55"
+        fill="none"
+      >
+        <defs>
+          <linearGradient id="olpGoldOrbit" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#b45309" stopOpacity="0.15" />
+            <stop offset="45%" stopColor="#fbbf24" stopOpacity="0.9" />
+            <stop offset="75%" stopColor="#fef08a" stopOpacity="0.95" />
+            <stop offset="100%" stopColor="#2563eb" stopOpacity="0.2" />
+          </linearGradient>
+        </defs>
+        <ellipse
+          cx="280"
+          cy="280"
+          rx="252"
+          ry="112"
+          transform="rotate(-24 280 280)"
+          stroke="url(#olpGoldOrbit)"
+          strokeWidth="2.5"
+        />
+      </svg>
+
+      {/* Dispersing Sapphire & Gold Square Pixels matching the logo */}
+      {LOGO_PIXELS.map((px, i) => (
+        <motion.span
+          key={i}
+          className={`absolute ${px.pos} rounded-[3px] z-20 ${px.tone}`}
+          animate={{ y: [0, -10, 0], opacity: [0.65, 1, 0.65] }}
+          transition={{ duration: px.dur, repeat: Infinity, ease: 'easeInOut', delay: i * 0.35 }}
+        />
+      ))}
+
       {ORBIT.map(o => (
         <motion.div
           key={o.slug}
@@ -282,12 +341,12 @@ export const RouteCurtain: React.FC<{ path: string }> = ({ path }) => {
     <div className="fixed inset-0 z-[90] pointer-events-none overflow-hidden" aria-hidden="true">
       <motion.div
         key={tick}
-        className="absolute inset-0 bg-gradient-to-br from-violet-700 via-indigo-700 to-slate-950"
+        className="absolute inset-0 bg-gradient-to-br from-blue-800 via-slate-950 to-amber-900/40"
         initial={{ y: '100%' }}
         animate={{ y: ['100%', '0%', '0%', '-100%'] }}
         transition={{ duration: 0.95, times: [0, 0.4, 0.55, 1], ease: [0.76, 0, 0.24, 1] }}
       >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.18),transparent_55%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(251,191,36,0.18),transparent_55%)]" />
       </motion.div>
     </div>
   );
@@ -347,7 +406,7 @@ export const ToolCarousel3D: React.FC<{ tools: CarouselTool[]; onOpen: (slug: st
       className="relative h-[430px] sm:h-[470px] select-none"
     >
       <div className="absolute left-1/2 bottom-6 -translate-x-1/2 w-[70%] h-24 rounded-[50%] bg-blue-500/25 blur-3xl" />
-      <div className="absolute left-1/2 bottom-10 -translate-x-1/2 w-[62%] h-px bg-gradient-to-r from-transparent via-blue-300/60 to-transparent" />
+      <div className="absolute left-1/2 bottom-10 -translate-x-1/2 w-[62%] h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent" />
       {tools.map((t, i) => (
         <div
           key={t.id}
